@@ -66,11 +66,21 @@ export default async function AdminStockPage({
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-4">
         <h1 className="text-2xl">Stock</h1>
-        <p className="tabular text-sm text-graphite-ink">
-          {counts.units} units across {counts.articles} articles · last upload{" "}
-          {(await relativeTime(stockDate))}
-          {stockDate && ` · ${(await formatDateTime(stockDate))}`}
-        </p>
+        <div className="flex flex-wrap items-baseline gap-4">
+          <p className="tabular text-sm text-graphite-ink">
+            {counts.units} units across {counts.articles} articles · last upload{" "}
+            {relativeTime(stockDate)}
+            {stockDate && ` · ${formatDateTime(stockDate)}`}
+          </p>
+          {/* A plain link: the route streams the file with an attachment header. */}
+          <a
+            href="/admin/stock/export"
+            download
+            className="hairline bg-paper-raised px-3 py-1.5 text-sm hover:border-fairway"
+          >
+            Download all stock (Excel)
+          </a>
+        </div>
       </div>
 
       <StockSubNav />

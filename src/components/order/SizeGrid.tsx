@@ -179,10 +179,69 @@ export function SizeGrid({
         </p>
       </div>
 
-      {/* Horizontal scroll with a sticky size header on mobile. Deliberately
-          not collapsed to a stacked list — buyers need to see the run as a
-          run (§6.3). */}
-      <div className="scroll-x hairline bg-paper-raised">
+      {/* Phones get a stacked list. Not just ergonomics: a wide table's
+          minimum content width feeds the mobile layout viewport calculation
+          even inside an overflow container, and the whole site rendered
+          zoomed out to ~600px because of it. From sm up, the run reads as a
+          run (§6.3) in the full grid below. */}
+      <ul className="sm:hidden hairline bg-paper-raised divide-y divide-sand">
+        {sorted.map((v) => {
+          const value = quantities.get(v.sku) ?? 0;
+          const soldOut = v.quantity <= 0;
+          const level = stockLevel(v.quantity);
+          return (
+            <li key={v.sku} className="flex items-center gap-3 px-3 py-2">
+              <span className="tabular w-12 shrink-0 text-sm font-medium">{v.size}</span>
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                <span
+                  className={[
+                    "tabular text-xs",
+                    level === "out"
+                      ? "text-graphite"
+                      : level === "low"
+                        ? "text-flag-ink font-medium"
+                        : "text-graphite-ink",
+                  ].join(" ")}
+                >
+                  {soldOut ? "Sold out" : `${v.quantity} available`}
+                </span>
+                <span aria-hidden className="h-1.5 flex-1 bg-paper-sunken">
+                  <span
+                    className={`block h-full ${level === "low" ? "bg-flag" : "bg-fairway"}`}
+                    style={{ width: `${stockBarHeight(v.quantity, maxAvailable)}%` }}
+                  />
+                </span>
+              </span>
+              <label className="sr-only" htmlFor={`${gridId}-m-${v.sku}`}>
+                {style_name} in {colour}, size {v.size}.{" "}
+                {soldOut ? "Sold out." : `${v.quantity} available.`}
+              </label>
+              <input
+                id={`${gridId}-m-${v.sku}`}
+                type="number"
+                inputMode="numeric"
+                step={1}
+                min={0}
+                max={v.quantity}
+                disabled={soldOut}
+                value={value === 0 ? "" : value}
+                placeholder={soldOut ? "—" : "0"}
+                aria-describedby={notes[v.sku] ? `${gridId}-${v.sku}-note` : undefined}
+                onChange={(e) => commit(v, Number(e.target.value))}
+                onFocus={(e) => e.currentTarget.select()}
+                className={[
+                  "h-11 w-16 shrink-0 hairline bg-paper text-center text-base",
+                  "focus:outline-none focus:border-fairway focus:bg-fairway-wash",
+                  "disabled:bg-paper-sunken disabled:text-graphite",
+                  value > 0 ? "font-bold text-fairway" : "text-ink",
+                ].join(" ")}
+              />
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="scroll-x hairline bg-paper-raised hidden sm:block">
         <table className="w-full border-collapse min-w-max">
           <caption className="sr-only">
             Quantities for {brand} {style_name} in {colour}, article {article_number}.
