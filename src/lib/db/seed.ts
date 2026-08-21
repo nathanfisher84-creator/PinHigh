@@ -140,6 +140,23 @@ async function importSeedFile(
   return { rows: parsed.rows.length, source: parsed.source };
 }
 
+/**
+ * Another process won the seed claim and is writing right now. On a shared
+ * database that matters in a way it never did per-process: a build worker
+ * that carries on immediately would prerender static pages against a
+ * half-seeded catalogue and bake that state in. So the losers wait for the
+ * winner's `seeded_at` marker, with a deadline so a crashed seeder cannot
+ * wedge every boot forever.
+ */
+async function waitForSeeder(): Promise<void> {
+  const deadline = Date.now() + 4 * 60_000;
+  while (Date.now() < deadline) {
+    if (await get("SELECT 1 FROM settings WHERE key = 'seeded_at'")) return;
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  console.error("[pinhigh] gave up waiting for another process to finish seeding");
+}
+
 async function seedCatalogue(): Promise<boolean> {
   const existing = await get<{ n: number }>("SELECT COUNT(*) AS n FROM products");
   if ((existing?.n ?? 0) > 0) return false;
@@ -148,8 +165,8 @@ async function seedCatalogue(): Promise<boolean> {
    * `next build` prerenders across several worker processes and each one boots
    * the app, so two can both see an empty catalogue and both seed. With the
    * invoice importing in "add" mode that doubled the stock — 1,500 units
-   * instead of 750. This claim is atomic in SQLite, so exactly one process
-   * wins and the rest return.
+   * instead of 750. This claim is a single atomic INSERT, so exactly one
+   * process wins; the rest wait for it to finish.
    */
   const claim = await run(
     `INSERT INTO settings (key, value, updated_at) VALUES ('seed_claim', ?, ?)
@@ -157,7 +174,10 @@ async function seedCatalogue(): Promise<boolean> {
     String(process.pid),
     now(),
   );
-  if (Number(claim.changes ?? 0) === 0) return false;
+  if (Number(claim.changes ?? 0) === 0) {
+    await waitForSeeder();
+    return false;
+  }
 
   // Order matters: the template defines the products, the invoice fills in
   // the stock against them.

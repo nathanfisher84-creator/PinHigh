@@ -81,7 +81,9 @@ async function openPg(url: string): Promise<Driver> {
       return { rows: res.rows, rowCount: res.rowCount ?? 0 };
     },
     async exec(text) {
-      await pool.query(text);
+      const client = als.getStore();
+      if (client) await client.query(text);
+      else await pool.query(text);
     },
     async withTransaction(fn) {
       const client = await pool.connect();
@@ -173,12 +175,7 @@ async function openPglite(): Promise<Driver> {
    ---------------------------------------------------------------------- */
 
 async function migrate(driver: Driver): Promise<void> {
-  // Several processes can boot at once (next build prerenders in parallel
-  // workers). The advisory lock makes exactly one run the DDL while the
-  // others wait for it to finish.
-  const usingPg = Boolean(process.env.DATABASE_URL);
-  if (usingPg) await driver.query("SELECT pg_advisory_lock(727272)", []);
-  try {
+  const ddl = async () => {
     await driver.exec(SCHEMA_SQL);
     // Columns added after the first release. Postgres has IF NOT EXISTS for
     // this, so no error-swallowing is needed.
@@ -188,8 +185,24 @@ async function migrate(driver: Driver): Promise<void> {
       ALTER TABLE stock_imports ADD COLUMN IF NOT EXISTS invoice_refs TEXT;
       ALTER TABLE stock_imports ADD COLUMN IF NOT EXISTS order_refs TEXT;
     `);
-  } finally {
-    if (usingPg) await driver.query("SELECT pg_advisory_unlock(727272)", []);
+  };
+
+  if (process.env.DATABASE_URL) {
+    // Several processes can boot at once (next build prerenders in parallel
+    // workers), so exactly one runs the DDL while the rest wait. The lock is
+    // TRANSACTION-scoped, not session-scoped: through a transaction pooler a
+    // session lock lands on an arbitrary pooled backend and the unlock can run
+    // on a different one, leaking the lock forever — which is precisely how
+    // the first deploy died ("canceling statement due to statement timeout"
+    // on pg_advisory_lock). A xact lock releases with the COMMIT no matter
+    // which backend served it. Postgres DDL is transactional, so the whole
+    // migration commits or none of it does.
+    await driver.withTransaction(async () => {
+      await driver.query("SELECT pg_advisory_xact_lock(727272)", []);
+      await ddl();
+    });
+  } else {
+    await ddl();
   }
 }
 
