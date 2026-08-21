@@ -216,16 +216,16 @@ async function seedCatalogue(): Promise<boolean> {
 
   let seeded = false;
   if (template && existsSync(template)) {
-    seeded = importSeedFile(template) !== null;
+    seeded = (await importSeedFile(template)) !== null;
   }
-  if (invoice) importSeedFile(invoice);
+  if (invoice) await importSeedFile(invoice);
 
   if (!seeded) return false;
 
   // Colour swatches for the colour switcher (§6.3). The importer does not set
   // these — colour_hex is owner-set — but a catalogue with no swatches cannot
   // demonstrate the switcher, so derive a reasonable one from the colour name.
-  applyColourHex();
+  await applyColourHex();
 
   return true;
 }
@@ -340,11 +340,11 @@ export async function ensureSeeded(): Promise<void> {
   globalThis.__pinhighSeeded = true;
 
   try {
-    seedBrandingPlacements();
-    seedRecipients();
+    await seedBrandingPlacements();
+    await seedRecipients();
     const seeded = await seedCatalogue();
 
-    if (seeded) seedImages();
+    if (seeded) await seedImages();
 
     if (seeded && !await get("SELECT 1 FROM settings WHERE key = 'seeded_at'")) {
       await setSetting("seeded_at", now());

@@ -40,10 +40,26 @@ if (!process.env.DATABASE_URL) {
 const started = Date.now();
 console.log("[db-setup] preparing the remote database…");
 
-const { ready, get } = await import("@/lib/db/core");
+const { ready, get, run } = await import("@/lib/db/core");
 const { ensureSeeded } = await import("@/lib/db/seed");
 
 await ready();
+
+// Self-heal: an earlier crashed or buggy seeder can leave the "done" markers
+// behind with nothing actually written, which would make every later boot
+// trust the marker and skip seeding forever. An empty catalogue with markers
+// present is exactly that state — clear them and let the seed run again.
+// This step is the only writer during a build, so the reset cannot race.
+const before = await get<{ n: number }>("SELECT COUNT(*) AS n FROM products");
+if ((before?.n ?? 0) === 0) {
+  const cleared = await run(
+    "DELETE FROM settings WHERE key IN ('seed_claim', 'seeded_at')",
+  );
+  if (cleared.changes > 0) {
+    console.log("[db-setup] catalogue empty but seed markers present — cleared, reseeding");
+  }
+}
+
 await ensureSeeded();
 
 const products = await get<{ n: number }>("SELECT COUNT(*) AS n FROM products");
