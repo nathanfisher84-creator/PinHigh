@@ -32,8 +32,6 @@ export interface CartLine {
   size: string;
   size_order: number;
   quantity: number;
-  /** Indicative only. Re-read from the server before anything is submitted. */
-  unit_price: number | null;
   category: string;
   branding?: BrandingSelection;
 }
@@ -204,6 +202,7 @@ export interface CartTotals {
   lines: number;
   articles: number;
   /** Indicative only — never presented as a price (§7.1). */
+  /** Always 0 on the client: prices never leave the server. Kept for shape stability. */
   value: number;
   brandedLines: number;
   hasBranding: boolean;
@@ -211,13 +210,12 @@ export interface CartTotals {
 
 export function totals(s: CartState): CartTotals {
   let units = 0;
-  let value = 0;
   let brandedLines = 0;
   const articles = new Set<string>();
 
   for (const l of s.lines) {
     units += l.quantity;
-    value += (l.unit_price ?? 0) * l.quantity;
+
     articles.add(l.article_number);
     if (l.branding?.placements.length) brandedLines++;
   }
@@ -226,7 +224,7 @@ export function totals(s: CartState): CartTotals {
     units,
     lines: s.lines.length,
     articles: articles.size,
-    value: Math.round(value * 100) / 100,
+    value: 0,
     brandedLines,
     hasBranding: brandedLines > 0,
   };
@@ -244,7 +242,7 @@ export function groupByArticle(s: CartState) {
     article_number,
     lines: [...lines].sort((a, b) => a.size_order - b.size_order),
     units: lines.reduce((n, l) => n + l.quantity, 0),
-    value: lines.reduce((n, l) => n + (l.unit_price ?? 0) * l.quantity, 0),
+    value: 0,
   }));
 }
 

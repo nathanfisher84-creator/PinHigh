@@ -24,8 +24,6 @@ export async function sendQuoteEmail(
   const from = process.env.ORDER_FROM_EMAIL;
   if (!apiKey || !from) throw new Error("Email is not configured.");
 
-  const csv = quoteLinesCsv(quote);
-
   const response = await fetch(RESEND_ENDPOINT, {
     method: "POST",
     headers: {
@@ -40,12 +38,18 @@ export async function sendQuoteEmail(
         ? `We have your quote request — ${quote.reference}`
         : `Quote request ${quote.reference} — ${quote.company_name} (${quote.total_units} units)`,
       html: renderQuoteEmail(quote, isBuyerCopy),
-      attachments: [
-        {
-          filename: `${quote.reference}-lines.csv`,
-          content: Buffer.from(csv, "utf8").toString("base64"),
-        },
-      ],
+      // The CSV carries indicative unit prices for the sales team. The buyer
+      // copy gets no attachment at all: the public site shows no prices, and
+      // a figure arriving as an attachment would undo that as surely as one
+      // on a page.
+      attachments: isBuyerCopy
+        ? undefined
+        : [
+            {
+              filename: `${quote.reference}-lines.csv`,
+              content: Buffer.from(quoteLinesCsv(quote), "utf8").toString("base64"),
+            },
+          ],
     }),
   });
 

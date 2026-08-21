@@ -146,7 +146,6 @@ export function ColourwayPanel({ runs, initialArticle, brand, styleName }: Props
             colour={active.colour}
             category={active.category}
             variants={active.variants}
-            unit_price={active.price_wholesale}
             case_pack={active.case_pack}
             moq={active.moq}
           />

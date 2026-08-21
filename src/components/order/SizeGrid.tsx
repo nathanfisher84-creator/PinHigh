@@ -38,7 +38,6 @@ export interface SizeGridProps {
   colour: string;
   category: string;
   variants: SizeGridVariant[];
-  unit_price: number | null;
   case_pack: number | null;
   moq: number | null;
 }
@@ -50,7 +49,6 @@ export function SizeGrid({
   colour,
   category,
   variants,
-  unit_price,
   case_pack,
   moq,
 }: SizeGridProps) {
@@ -124,12 +122,11 @@ export function SizeGrid({
           colour,
           size: variant.size,
           size_order: variant.size_order,
-          unit_price,
           category,
         },
       });
     },
-    [article_number, brand, style_name, colour, category, unit_price, case_pack, setNote],
+    [article_number, brand, style_name, colour, category, case_pack, setNote],
   );
 
   /**

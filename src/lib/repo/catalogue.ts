@@ -56,7 +56,7 @@ export interface CatalogueFilters {
   condition?: string[];
   inStockOnly?: boolean;
   search?: string;
-  sort?: "relevance" | "newest" | "price-asc" | "price-desc" | "name" | "stock";
+  sort?: "relevance" | "newest" | "name" | "stock";
 }
 
 /** A listing card. Where a style_group is set, colourways collapse into one. */
@@ -71,8 +71,6 @@ export interface CatalogueCard {
   condition: Condition;
   colour: string;
   colour_hex: string | null;
-  price_wholesale: number | null;
-  rrp: number | null;
   total_quantity: number;
   /** Sizes with stock, in run order — the availability strip on the card. */
   sizes: { size: string; quantity: number }[];
@@ -183,8 +181,6 @@ function collapse(rows: JoinedRow[]): CatalogueCard[] {
       condition: lead.condition,
       colour: lead.colour,
       colour_hex: lead.colour_hex,
-      price_wholesale: lead.price_wholesale,
-      rrp: lead.rrp,
       total_quantity: lead.total_quantity,
       sizes: parseSizes(lead.sizes_json),
       image: lead.image,
@@ -276,14 +272,6 @@ function pickLead(r: JoinedRow) {
 function sortCards(cards: CatalogueCard[], filters: CatalogueFilters): CatalogueCard[] {
   const sorted = [...cards];
   switch (filters.sort) {
-    case "price-asc":
-      return sorted.sort(
-        (a, b) => (a.price_wholesale ?? Infinity) - (b.price_wholesale ?? Infinity),
-      );
-    case "price-desc":
-      return sorted.sort(
-        (a, b) => (b.price_wholesale ?? -Infinity) - (a.price_wholesale ?? -Infinity),
-      );
     case "name":
       return sorted.sort((a, b) => a.style_name.localeCompare(b.style_name));
     case "stock":
@@ -362,13 +350,18 @@ export function getProductByArticle(
  * be instant, and a buyer comparing three colours is the normal case, not an
  * edge one.
  */
+/**
+ * One colourway's size run, as sent to the client-side order panel.
+ *
+ * Deliberately carries no price fields: this object is serialised into the
+ * page payload, and the no-public-prices rule covers view-source as much as
+ * the rendered page. The server re-prices every line at submission.
+ */
 export interface ColourwayRun {
   article_number: string;
   colour: string;
   colour_hex: string | null;
   condition: Condition;
-  price_wholesale: number | null;
-  rrp: number | null;
   case_pack: number | null;
   moq: number | null;
   category: Category;
@@ -405,8 +398,6 @@ export function getColourwayRuns(product: ProductWithVariants): ColourwayRun[] {
       colour: p.colour,
       colour_hex: p.colour_hex,
       condition: p.condition,
-      price_wholesale: p.price_wholesale,
-      rrp: p.rrp,
       case_pack: p.case_pack,
       moq: p.moq,
       category: p.category,

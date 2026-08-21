@@ -21,7 +21,18 @@ import { resendQuoteNotifications } from "@/lib/notify";
 import { sendWhatsAppTest } from "@/lib/notify/whatsapp";
 import { rollbackImport } from "@/lib/import/commit";
 import { adjustStock } from "@/lib/repo/stock";
+import { QUOTE_STATUSES } from "@/lib/domain/types";
 import type { QuoteStatus } from "@/lib/domain/types";
+
+/** Every mutating action below is a globally-addressable POST endpoint, so
+ * each one re-checks the signed session cookie itself. The /admin middleware
+ * only guards page navigation - it never sees a direct action invocation. */
+async function requireAdmin(): Promise<string> {
+  const session = await getSession();
+  if (!session) throw new Error("Not signed in.");
+  return session.email;
+}
+
 
 /* -------------------------------------------------------------------------
    Auth
@@ -75,6 +86,8 @@ export async function logout() {
    ---------------------------------------------------------------------- */
 
 export async function setQuoteStatus(id: string, status: QuoteStatus) {
+  await requireAdmin();
+  if (!QUOTE_STATUSES.includes(status)) throw new Error("Unknown status.");
   updateQuoteStatus(id, status);
   revalidatePath(`/admin/quotes/${id}`);
   revalidatePath("/admin/quotes");
@@ -82,8 +95,10 @@ export async function setQuoteStatus(id: string, status: QuoteStatus) {
 }
 
 export async function saveQuoteDetails(id: string, formData: FormData) {
+  await requireAdmin();
   const rawValue = String(formData.get("quoted_value") ?? "").trim();
-  const parsed = rawValue === "" ? null : Number(rawValue.replace(/[^\d.]/g, ""));
+  const stripped = rawValue.replace(/[^\d.]/g, "");
+  const parsed = stripped === "" ? null : Number(stripped);
 
   updateQuoteFields(id, {
     quoted_value: parsed !== null && Number.isFinite(parsed) ? parsed : null,
@@ -94,6 +109,7 @@ export async function saveQuoteDetails(id: string, formData: FormData) {
 }
 
 export async function resendNotifications(id: string): Promise<{ message: string }> {
+  await requireAdmin();
   const quote = getQuoteById(id);
   if (!quote) return { message: "That request no longer exists." };
 
@@ -123,6 +139,7 @@ export async function resendNotifications(id: string): Promise<{ message: string
    ---------------------------------------------------------------------- */
 
 export async function rollbackStockImport(importId: string): Promise<{ message: string }> {
+  await requireAdmin();
   try {
     const { restored } = rollbackImport(importId);
     revalidatePath("/admin/stock");
@@ -139,6 +156,7 @@ export async function rollbackStockImport(importId: string): Promise<{ message: 
    ---------------------------------------------------------------------- */
 
 export async function saveProduct(id: string, formData: FormData) {
+  await requireAdmin();
   const num = (key: string) => {
     const raw = String(formData.get(key) ?? "").trim();
     if (raw === "") return null;
@@ -196,6 +214,7 @@ export async function saveProduct(id: string, formData: FormData) {
 }
 
 export async function setProductVisibility(ids: string[], visible: boolean) {
+  await requireAdmin();
   if (ids.length === 0) return;
   run(
     `UPDATE products SET is_visible = ?, updated_at = ?
@@ -214,6 +233,7 @@ export async function setProductVisibility(ids: string[], visible: boolean) {
    ---------------------------------------------------------------------- */
 
 export async function addRecipient(formData: FormData): Promise<{ error?: string }> {
+  await requireAdmin();
   const name = String(formData.get("name") ?? "").trim();
   const channel = String(formData.get("channel") ?? "email") as "email" | "whatsapp";
   const value = String(formData.get("value") ?? "").trim();
@@ -243,18 +263,21 @@ export async function addRecipient(formData: FormData): Promise<{ error?: string
 }
 
 export async function toggleRecipient(id: string, active: boolean) {
+  await requireAdmin();
   run("UPDATE notification_recipients SET is_active = ? WHERE id = ?", active ? 1 : 0, id);
   audit("recipient.toggle", id, { active });
   revalidatePath("/admin/recipients");
 }
 
 export async function removeRecipient(id: string) {
+  await requireAdmin();
   run("DELETE FROM notification_recipients WHERE id = ?", id);
   audit("recipient.remove", id);
   revalidatePath("/admin/recipients");
 }
 
 export async function testWhatsApp(value: string): Promise<{ message: string }> {
+  await requireAdmin();
   try {
     await sendWhatsAppTest(value);
     audit("recipient.test", value);
@@ -281,6 +304,7 @@ const EDITABLE_SETTINGS = [
 ];
 
 export async function saveSettings(formData: FormData) {
+  await requireAdmin();
   for (const key of EDITABLE_SETTINGS) {
     if (!formData.has(key)) {
       // Unchecked checkboxes are absent from the payload entirely.
