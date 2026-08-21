@@ -439,7 +439,9 @@ export function parseStockSheet(
       continue;
     }
 
-    const gender = normaliseGender(cell(row, "gender"));
+    const gender = cell(row, "gender")
+      ? normaliseGender(cell(row, "gender"))
+      : "unisex"; // no gender column is fine — the owner sets it per article
     if (!gender) {
       issues.push({
         level: "error",
@@ -451,7 +453,9 @@ export function parseStockSheet(
       continue;
     }
 
-    const category = normaliseCategory(cell(row, "category"));
+    const category = cell(row, "category")
+      ? normaliseCategory(cell(row, "category"))
+      : "accessories"; // placeholder; needs_review keeps it honest below
     if (!category) {
       issues.push({
         level: "error",
@@ -475,23 +479,19 @@ export function parseStockSheet(
       continue;
     }
 
-    const brand = cell(row, "brand");
-    const style_name = cell(row, "style_name");
+    const brand = cell(row, "brand") || "adidas";
+    /*
+     * A stock report needs only article, size and quantity. Where name or
+     * colour is absent, the article number stands in and the row is marked
+     * needs_review — for an article already in the catalogue the commit then
+     * leaves the owner's details untouched and just moves the quantity; a
+     * genuinely new article lists under its number until the owner names it,
+     * the same convention as an adidas invoice.
+     */
+    const style_name = cell(row, "style_name") || article;
     const colour = cell(row, "colour");
-
-    const missing: string[] = [];
-    if (!brand) missing.push("Brand");
-    if (!style_name) missing.push("Description");
-    if (!colour) missing.push("Colour");
-    if (missing.length) {
-      issues.push({
-        level: "error",
-        rowNumber,
-        message: `${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"} empty.`,
-      });
-      rowsFailed++;
-      continue;
-    }
+    const needsDetails =
+      !cell(row, "style_name") || !colour || !cell(row, "category");
 
     const style_group = cell(row, "style_group") || null;
 
@@ -515,7 +515,7 @@ export function parseStockSheet(
       season: cell(row, "season") || null,
       is_discontinued: parseBoolean(cell(row, "is_discontinued")),
       cost_price: null,
-      needs_review: false,
+      needs_review: needsDetails,
       sku: deriveSku(article, size),
     };
 

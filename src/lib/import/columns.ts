@@ -56,7 +56,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "brand",
     canonical: "Brand",
-    required: true,
+    required: false,
     aliases: ["brand", "make", "manufacturer", "vendor", "supplier", "label"],
     help: "adidas, Callaway, Titleist and so on.",
   },
@@ -70,7 +70,7 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "style_name",
     canonical: "Description",
-    required: true,
+    required: false,
     aliases: [
       "description", "name", "product", "stylename", "productname", "title",
       "productdescription", "desc", "itemdescription",
@@ -87,21 +87,21 @@ export const FIELDS: FieldSpec[] = [
   {
     key: "colour",
     canonical: "Colour",
-    required: true,
+    required: false,
     aliases: ["colour", "color", "col", "colourway", "colorway", "shade"],
     help: "The colourway on its own.",
   },
   {
     key: "gender",
     canonical: "Gender",
-    required: true,
+    required: false,
     aliases: ["gender", "sex", "department", "dept", "audience", "fit"],
     help: "Mens, Ladies, Junior or Unisex.",
   },
   {
     key: "category",
     canonical: "Category",
-    required: true,
+    required: false,
     aliases: ["category", "type", "producttype", "itemtype", "group2", "productgroup", "range"],
     help: "Polos, Shoes, Golf Bags and so on.",
   },

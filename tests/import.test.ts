@@ -598,3 +598,38 @@ describe("refusals are explicit", () => {
     );
   });
 });
+
+describe("a bare stock report (article, size, quantity only)", () => {
+  const rows = [
+    ["Article", "Size", "Qty"],
+    ["HZ6891", "M", "12"],
+    ["HZ6891", "L", "0"],
+    ["ZZ9999", "XL", "5"],
+  ];
+
+  test("three columns are enough — nothing required is missing", () => {
+    const { missingRequired } = matchHeaders(rows[0]);
+    assert.deepEqual(missingRequired, []);
+  });
+
+  test("quantities import; details are deferred to the catalogue", () => {
+    const parsed = parseStockSheet(rows);
+    assert.equal(parsed.rows.length, 3);
+    assert.equal(parsed.rowsFailed, 0);
+
+    const m = parsed.rows.find((r) => r.sku === "HZ6891-M");
+    assert.ok(m);
+    assert.equal(m.quantity, 12);
+    // No name or colour in the file: the article number stands in and the
+    // row is flagged so the commit never overwrites owner-entered details.
+    assert.equal(m.style_name, "HZ6891");
+    assert.equal(m.needs_review, true);
+    assert.equal(m.gender, "unisex");
+  });
+
+  test("a sold-out size still imports as zero", () => {
+    const parsed = parseStockSheet(rows);
+    const l = parsed.rows.find((r) => r.sku === "HZ6891-L");
+    assert.equal(l?.quantity, 0);
+  });
+});
