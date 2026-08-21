@@ -373,6 +373,9 @@ export interface ColourwayRun {
   category: Category;
   total_quantity: number;
   image: string | null;
+  /** Every photograph of this colourway, primary first — the supplier packs
+   *  carry multiple angles and §5 says the buyer sees all of them. */
+  images: { url: string; alt: string | null }[];
   variants: { sku: string; size: string; size_order: number; quantity: number }[];
 }
 
@@ -395,14 +398,16 @@ export async function getColourwayRuns(product: ProductWithVariants): Promise<Co
         WHERE product_id = ? ORDER BY size_order ASC`,
       p.id,
     );
-    const image = await get<{ storage_path: string }>(
+    const imageRows = await all<{ storage_path: string; alt_text: string | null }>(
       `SELECT CASE WHEN storage_path LIKE '/%' OR storage_path LIKE 'http%'
                    THEN storage_path
-                   ELSE '/images/' || storage_path END AS storage_path
+                   ELSE '/images/' || storage_path END AS storage_path,
+              alt_text
          FROM product_images WHERE product_id = ?
-        ORDER BY is_primary DESC, sort_order ASC LIMIT 1`,
+        ORDER BY is_primary DESC, sort_order ASC`,
       p.id,
     );
+    const images = imageRows.map((r) => ({ url: r.storage_path, alt: r.alt_text }));
     return {
       article_number: p.article_number,
       colour: p.colour,
@@ -412,7 +417,8 @@ export async function getColourwayRuns(product: ProductWithVariants): Promise<Co
       moq: p.moq,
       category: p.category,
       total_quantity: variants.reduce((n, v) => n + v.quantity, 0),
-      image: image?.storage_path ?? null,
+      image: images[0]?.url ?? null,
+      images,
       variants,
     };
     }),

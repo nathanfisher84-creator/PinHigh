@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ColourwayRun } from "@/lib/repo/catalogue";
 import { SizeGrid } from "./SizeGrid";
-import { ProductImage } from "@/components/catalogue/ProductImage";
+import { ProductStage } from "./ProductStage";
 import { ConditionTag } from "@/components/catalogue/ConditionTag";
 import { useCart } from "@/lib/cart/store";
 import { units } from "@/lib/format";
@@ -69,20 +69,18 @@ export function ColourwayPanel({ runs, initialArticle, brand, styleName }: Props
   return (
     <div>
       <div className="grid gap-8 lg:grid-cols-2">
-        <div className="relative aspect-[4/5] bg-paper-sunken hairline">
-          <ProductImage
-            src={active.image}
-            alt={`${styleName} in ${active.colour}`}
-            articleNumber={active.article_number}
-            sizes="(max-width: 1024px) 100vw, 50vw"
-            priority
-          />
-          {active.condition !== "new" && (
-            <span className="absolute right-0 top-0">
+        <ProductStage
+          key={active.article_number}
+          images={active.images}
+          articleNumber={active.article_number}
+          styleName={styleName}
+          colour={active.colour}
+          badge={
+            active.condition !== "new" ? (
               <ConditionTag condition={active.condition} size="md" />
-            </span>
-          )}
-        </div>
+            ) : undefined
+          }
+        />
 
         <div>
           {/* Rendered as the brand writes it — adidas is lowercase by design. */}
