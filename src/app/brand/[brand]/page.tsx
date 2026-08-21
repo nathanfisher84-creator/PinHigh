@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { listCatalogue, getFacets, listBrands } from "@/lib/repo/catalogue";
 import { FilterBar } from "@/components/catalogue/FilterBar";
+import { BrowseBar } from "@/components/catalogue/BrowseBar";
 import { ProductCard } from "@/components/catalogue/ProductCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -75,6 +76,8 @@ export default async function BrandPage({
           {totalUnits.toLocaleString("en-AE")} units in stock
         </p>
       </div>
+
+      <BrowseBar categories={facets.categories} genders={facets.genders} />
 
       <FilterBar
         facets={facets}

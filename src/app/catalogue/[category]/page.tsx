@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { listCatalogue, getFacets } from "@/lib/repo/catalogue";
 import { FilterBar } from "@/components/catalogue/FilterBar";
+import { BrowseBar } from "@/components/catalogue/BrowseBar";
 import { ProductCard } from "@/components/catalogue/ProductCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/domain/types";
@@ -61,6 +62,8 @@ export default async function CategoryPage({
           a quote request.
         </p>
       </div>
+
+      <BrowseBar categories={facets.categories} genders={facets.genders} />
 
       <FilterBar
         facets={facets}

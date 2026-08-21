@@ -4,10 +4,16 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Facet } from "@/lib/repo/catalogue";
-import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
+import {
+  CATEGORY_LABELS,
+  GENDER_LABELS,
+  type Category,
+  type Gender,
+} from "@/lib/domain/types";
 import { stockAsAt } from "@/lib/format";
 import { useCartTotals } from "@/lib/cart/store";
 import { Wordmark } from "./Wordmark";
+import { CatalogueMenu } from "./CatalogueMenu";
 
 /**
  * Site header.
@@ -22,17 +28,17 @@ import { Wordmark } from "./Wordmark";
 interface Props {
   brands: Facet[];
   categories: Facet[];
+  genders: Facet[];
   stockDate: string | null;
   announcement: string;
 }
 
 const NAV = [
-  { href: "/catalogue", label: "Catalogue" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
 ];
 
-export function SiteHeader({ categories, stockDate, announcement }: Props) {
+export function SiteHeader({ categories, genders, stockDate, announcement }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -68,6 +74,8 @@ export function SiteHeader({ categories, stockDate, announcement }: Props) {
               aria-label="Main"
               className="hidden lg:flex items-center gap-9 text-sm"
             >
+              <CatalogueMenu categories={categories} genders={genders} />
+
               {NAV.map((item) => {
                 const active = pathname.startsWith(item.href);
                 return (
@@ -146,6 +154,9 @@ export function SiteHeader({ categories, stockDate, announcement }: Props) {
               </form>
 
               <nav aria-label="Main" className="space-y-1">
+                <Link href="/catalogue" className="block display text-3xl py-1">
+                  Catalogue
+                </Link>
                 {NAV.map((item) => (
                   <Link
                     key={item.href}
@@ -157,14 +168,41 @@ export function SiteHeader({ categories, stockDate, announcement }: Props) {
                 ))}
               </nav>
 
+              {genders.length > 0 && (
+                <nav aria-label="Shop by fit">
+                  <p className="label-caps mb-3">By fit</p>
+                  <ul className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                    {genders.map((g) => (
+                      <li key={g.value}>
+                        <Link
+                          href={`/catalogue?gender=${encodeURIComponent(g.value)}`}
+                          className="flex items-baseline justify-between gap-3 py-1"
+                        >
+                          {GENDER_LABELS[g.value as Gender] ?? g.label}
+                          <span className="tabular text-xs text-graphite-ink">
+                            {g.count}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+              )}
+
               {categories.length > 0 && (
                 <nav aria-label="Categories">
                   <p className="label-caps mb-3">Categories</p>
                   <ul className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                     {categories.map((c) => (
                       <li key={c.value}>
-                        <Link href={`/catalogue/${c.value}`} className="block py-1">
+                        <Link
+                          href={`/catalogue/${c.value}`}
+                          className="flex items-baseline justify-between gap-3 py-1"
+                        >
                           {CATEGORY_LABELS[c.value as Category] ?? c.label}
+                          <span className="tabular text-xs text-graphite-ink">
+                            {c.count}
+                          </span>
                         </Link>
                       </li>
                     ))}

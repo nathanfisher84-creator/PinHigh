@@ -72,6 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteHeader
           brands={facets.brands}
           categories={facets.categories}
+          genders={facets.genders}
           stockDate={stockDate}
           announcement={announcement}
         />
@@ -80,7 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
 
-        <SiteFooter stockDate={stockDate} />
+        <SiteFooter stockDate={stockDate} categories={facets.categories} />
 
         {/* The running total. Persistent rail on desktop, bottom bar on mobile
             (§6.3). Rendered once at the root so it survives navigation between

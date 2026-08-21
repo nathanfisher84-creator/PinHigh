@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { listCatalogue, getFacets, findExactArticle } from "@/lib/repo/catalogue";
 import { FilterBar } from "@/components/catalogue/FilterBar";
+import { BrowseBar } from "@/components/catalogue/BrowseBar";
 import { ProductCard } from "@/components/catalogue/ProductCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { GENDER_LABELS, type Gender } from "@/lib/domain/types";
 
 export const metadata: Metadata = {
   title: "Catalogue",
@@ -34,11 +36,23 @@ export default async function CataloguePage({
     if (exact) redirect(`/product/${encodeURIComponent(exact)}`);
   }
 
+  /*
+   * The heading names whatever narrowed the list, so a buyer arriving on
+   * /catalogue?gender=ladies is told they are looking at Ladies rather than
+   * at an apparently unfiltered "Catalogue".
+   */
+  const genderFilter = toArray(params.gender);
+  const heading = query
+    ? `Search: ${query}`
+    : genderFilter?.length === 1
+      ? GENDER_LABELS[genderFilter[0] as Gender] ?? "Catalogue"
+      : "Catalogue";
+
   const facets = getFacets();
   const cards = listCatalogue({
     brand: toArray(params.brand),
     category: toArray(params.category),
-    gender: toArray(params.gender),
+    gender: genderFilter,
     condition: toArray(params.condition),
     colour: toArray(params.colour),
     inStockOnly: params.stock === "1",
@@ -49,14 +63,14 @@ export default async function CataloguePage({
   return (
     <>
       <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 pt-14 pb-8">
-        <h1 className="display text-4xl lg:text-6xl">
-          {query ? `Search: ${query}` : "Catalogue"}
-        </h1>
+        <h1 className="display text-4xl lg:text-6xl">{heading}</h1>
         <p className="mt-2 max-w-2xl text-graphite-ink">
           Everything here is quoted, not sold online. Enter quantities against the
           sizes you need and send it to our team.
         </p>
       </div>
+
+      <BrowseBar categories={facets.categories} genders={facets.genders} />
 
       <FilterBar facets={facets} resultCount={cards.length} />
 

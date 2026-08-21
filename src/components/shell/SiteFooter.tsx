@@ -4,11 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Wordmark } from "./Wordmark";
 import { stockAsAt } from "@/lib/format";
-import { CATEGORY_LABELS } from "@/lib/domain/types";
+import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
+import type { Facet } from "@/lib/repo/catalogue";
 
-const FOOTER_CATEGORIES = ["polos", "mid-layers", "outerwear", "caps"] as const;
-
-export function SiteFooter({ stockDate }: { stockDate: string | null }) {
+export function SiteFooter({
+  stockDate,
+  categories,
+}: {
+  stockDate: string | null;
+  /** Only categories that hold stock — a footer link to an empty
+   *  category is a dead end, and the list was hardcoded before. */
+  categories: Facet[];
+}) {
   const pathname = usePathname();
 
   // The admin panel is a working tool, not a storefront.
@@ -32,13 +39,13 @@ export function SiteFooter({ stockDate }: { stockDate: string | null }) {
             <nav aria-label="Catalogue">
               <h2 className="label-caps text-on-fairway-dim mb-4">Catalogue</h2>
               <ul className="space-y-2.5 text-sm">
-                {FOOTER_CATEGORIES.map((c) => (
-                  <li key={c}>
+                {categories.slice(0, 5).map((c) => (
+                  <li key={c.value}>
                     <Link
-                      href={`/catalogue/${c}`}
+                      href={`/catalogue/${c.value}`}
                       className="link-underline hover:link-underline-on"
                     >
-                      {CATEGORY_LABELS[c]}
+                      {CATEGORY_LABELS[c.value as Category] ?? c.label}
                     </Link>
                   </li>
                 ))}
