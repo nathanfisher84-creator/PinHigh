@@ -11,7 +11,7 @@ import type { ParsedRow, RowIssue } from "./parse";
  * and there is a way back for 30 days.
  */
 
-export type ImportMode = "upsert" | "replace";
+export type ImportMode = "upsert" | "replace" | "add";
 
 export interface StockDiff {
   mode: ImportMode;
@@ -106,13 +106,18 @@ export function buildDiff(
   for (const v of existing.values()) unitsBefore += v.quantity;
   let unitsAfter = 0;
 
+  // A delivery adds to what is on the shelf; a stock take replaces it.
+  const adding = mode === "add";
+  if (adding) unitsAfter = unitsBefore;
+
   for (const row of rows) {
-    unitsAfter += row.quantity;
     const prior = existing.get(row.sku);
+    const after = adding ? (prior?.quantity ?? 0) + row.quantity : row.quantity;
+    unitsAfter += adding ? row.quantity : row.quantity;
 
     if (prior) {
       skusUpdated++;
-      if (prior.quantity !== row.quantity) {
+      if (prior.quantity !== after) {
         movements.push({
           sku: row.sku,
           article_number: row.article_number,
@@ -120,8 +125,8 @@ export function buildDiff(
           colour: row.colour,
           size: row.size,
           before: prior.quantity,
-          after: row.quantity,
-          delta: row.quantity - prior.quantity,
+          after,
+          delta: after - prior.quantity,
         });
       }
     } else {
@@ -139,8 +144,10 @@ export function buildDiff(
     }
   }
 
+  // In "add" mode nothing is absent — the delivery simply did not include it,
+  // which is not a reason to zero anything.
   const absent: AbsentSku[] = [];
-  for (const [sku, v] of existing) {
+  for (const [sku, v] of adding ? [] : existing) {
     if (inFile.has(sku)) continue;
     absent.push({
       sku,
@@ -229,7 +236,14 @@ export function commitImport(
   rows: ParsedRow[],
   mode: ImportMode,
   diff: StockDiff,
-  meta: { filename: string; storagePath?: string | null; uploadedBy?: string | null },
+  meta: {
+    filename: string;
+    storagePath?: string | null;
+    uploadedBy?: string | null;
+    /** adidas invoice numbers applied here, so the same delivery cannot
+     *  be counted into stock twice. */
+    invoiceRefs?: string[];
+  },
 ): CommitResult {
   const importId = uid();
   const timestamp = now();
@@ -270,32 +284,49 @@ export function commitImport(
       if (existingProduct) {
         productId = existingProduct.id;
         run(
-          `UPDATE products SET
-             brand = ?, style_group = ?, style_name = ?, condition = ?, colour = ?,
-             category = ?, gender = ?,
-             price_wholesale = ?, rrp = ?,
-             case_pack = COALESCE(?, case_pack),
-             moq = COALESCE(?, moq),
-             season = COALESCE(?, season),
-             is_discontinued = COALESCE(?, is_discontinued),
-             is_visible = 1,
-             updated_at = ?
-           WHERE id = ?`,
-          lead.brand,
-          lead.style_group,
-          lead.style_name,
-          lead.condition,
-          lead.colour,
-          lead.category,
-          lead.gender,
-          priceFromFile ?? existingProduct.price_wholesale,
-          rrpFromFile ?? existingProduct.rrp,
-          lead.case_pack,
-          lead.moq,
-          lead.season,
-          lead.is_discontinued === null ? null : lead.is_discontinued ? 1 : 0,
-          timestamp,
-          productId,
+          /*
+           * An invoice re-import must never overwrite the name, colour,
+           * category or gender the owner typed in — the file does not contain
+           * them, so it has nothing better to offer. Those fields are only
+           * written when the file actually carries them.
+           */
+          lead.needs_review
+            ? `UPDATE products SET
+                 brand = ?,
+                 rrp = COALESCE(?, rrp),
+                 cost_price = COALESCE(?, cost_price),
+                 updated_at = ?
+               WHERE id = ?`
+            : `UPDATE products SET
+                 brand = ?, style_group = ?, style_name = ?, condition = ?, colour = ?,
+                 category = ?, gender = ?,
+                 price_wholesale = ?, rrp = ?,
+                 case_pack = COALESCE(?, case_pack),
+                 moq = COALESCE(?, moq),
+                 season = COALESCE(?, season),
+                 is_discontinued = COALESCE(?, is_discontinued),
+                 is_visible = 1,
+                 updated_at = ?
+               WHERE id = ?`,
+          ...(lead.needs_review
+            ? [lead.brand, lead.rrp, lead.cost_price ?? null, timestamp, productId]
+            : [
+                lead.brand,
+                lead.style_group,
+                lead.style_name,
+                lead.condition,
+                lead.colour,
+                lead.category,
+                lead.gender,
+                priceFromFile ?? existingProduct.price_wholesale,
+                rrpFromFile ?? existingProduct.rrp,
+                lead.case_pack,
+                lead.moq,
+                lead.season,
+                lead.is_discontinued === null ? null : lead.is_discontinued ? 1 : 0,
+                timestamp,
+                productId,
+              ]),
         );
       } else {
         productId = uid();
@@ -303,9 +334,9 @@ export function commitImport(
           `INSERT INTO products (
              id, article_number, brand, style_group, style_name, condition, colour,
              colour_hex, category, gender, description, fabric, season,
-             price_wholesale, rrp, case_pack, moq,
+             price_wholesale, rrp, cost_price, needs_review, case_pack, moq,
              is_visible, is_discontinued, sort_order, created_at, updated_at
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           productId,
           articleNumber,
           lead.brand,
@@ -321,8 +352,16 @@ export function commitImport(
           lead.season,
           priceFromFile ?? null,
           rrpFromFile ?? null,
+          lead.cost_price ?? null,
+          lead.needs_review ? 1 : 0,
           lead.case_pack,
           lead.moq,
+          /*
+           * Visible even when it still needs a name. A trade buyer navigates by
+           * article number (§6.2) and the size run and stock are real, so the
+           * product is genuinely usable as "HZ6891" — more usable than absent.
+           * The admin nags until it has a proper name and colour.
+           */
           1,
           lead.is_discontinued ? 1 : 0,
           sortCursor++,
@@ -338,8 +377,11 @@ export function commitImport(
         );
         if (existingVariant) {
           run(
-            `UPDATE variants SET product_id = ?, size = ?, size_order = ?, quantity = ?, updated_at = ?
-              WHERE id = ?`,
+            mode === "add"
+              ? `UPDATE variants SET product_id = ?, size = ?, size_order = ?,
+                   quantity = quantity + ?, updated_at = ? WHERE id = ?`
+              : `UPDATE variants SET product_id = ?, size = ?, size_order = ?,
+                   quantity = ?, updated_at = ? WHERE id = ?`,
             productId,
             row.size,
             row.size_order,
@@ -369,13 +411,15 @@ export function commitImport(
     // Never delete a product row — quote history references it (§4.3).
     // Both modes zero the quantity; replace additionally hides the product so
     // it drops out of the catalogue without losing its history.
-    for (const absent of diff.absent) {
-      run(
-        "UPDATE variants SET quantity = 0, updated_at = ? WHERE sku = ?",
-        timestamp,
-        absent.sku,
-      );
-      rowsZeroed++;
+    if (mode !== "add") {
+      for (const absent of diff.absent) {
+        run(
+          "UPDATE variants SET quantity = 0, updated_at = ? WHERE sku = ?",
+          timestamp,
+          absent.sku,
+        );
+        rowsZeroed++;
+      }
     }
 
     if (mode === "replace") {
@@ -396,8 +440,8 @@ export function commitImport(
       `INSERT INTO stock_imports (
          id, filename, storage_path, uploaded_by, mode,
          rows_total, rows_created, rows_updated, rows_zeroed, rows_failed,
-         error_log, snapshot_before, status, created_at
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         error_log, snapshot_before, status, invoice_refs, created_at
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       importId,
       meta.filename,
       meta.storagePath ?? null,
@@ -411,6 +455,7 @@ export function commitImport(
       JSON.stringify(diff.issues),
       JSON.stringify(snapshot),
       "committed",
+      meta.invoiceRefs?.length ? JSON.stringify(meta.invoiceRefs) : null,
       timestamp,
     );
   });

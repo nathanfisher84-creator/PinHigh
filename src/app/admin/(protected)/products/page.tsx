@@ -30,6 +30,8 @@ export interface AdminProductRow {
   moq: number | null;
   is_visible: number;
   is_discontinued: number;
+  needs_review: number;
+  cost_price: number | null;
   sort_order: number;
   total_quantity: number;
   image_count: number;
@@ -84,14 +86,47 @@ export default async function AdminProductsPage({
   }
 
   const withoutImages = products.filter((p) => p.image_count === 0).length;
+  const needingDetails = products.filter((p) => p.needs_review);
 
   return (
     <div>
       <h1 className="text-2xl">Products</h1>
       <p className="mt-2 max-w-2xl text-sm text-graphite-ink">
-        Names, prices and visibility. Stock quantities come from the Excel upload
-        and are edited there, not here.
+        Names, prices and visibility. Stock quantities come from the adidas
+        upload and are edited there, not here.
       </p>
+
+      {/*
+        An adidas invoice carries article numbers, sizes and quantities and
+        nothing else — no product name, colour, category or gender. Those
+        articles are live on the site under their article number, which a trade
+        buyer can work with, but they need a real name before they read well.
+      */}
+      {needingDetails.length > 0 && (
+        <section className="mt-6 hairline border-flag bg-flag-wash px-4 py-4">
+          <h2 className="font-medium">
+            {needingDetails.length}{" "}
+            {needingDetails.length === 1 ? "product needs" : "products need"} a name
+            and colour
+          </h2>
+          <p className="mt-1 text-sm">
+            These came from an adidas invoice, which does not carry product
+            details. They are on the site under their article number. Add a name,
+            colour, category and your selling price and they will read properly.
+          </p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {needingDetails.map((p) => (
+              <a
+                key={p.id}
+                href={`?q=${encodeURIComponent(p.article_number)}`}
+                className="tabular hairline bg-paper px-2.5 py-1 text-xs hover:border-fairway"
+              >
+                {p.article_number}
+              </a>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="mt-8">
         <div className="flex flex-wrap items-baseline justify-between gap-3 mb-3">

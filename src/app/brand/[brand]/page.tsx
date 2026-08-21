@@ -67,9 +67,9 @@ export default async function BrandPage({
 
   return (
     <>
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-10 pb-6">
+      <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 pt-14 pb-8">
         <p className="label-caps">Brand</p>
-        <h1 className="mt-2 text-3xl display-xl">{resolved}</h1>
+        <h1 className="mt-3 display text-4xl lg:text-6xl">{resolved}</h1>
         <p className="mt-2 tabular text-sm text-graphite-ink">
           {cards.length} {cards.length === 1 ? "style" : "styles"} ·{" "}
           {totalUnits.toLocaleString("en-AE")} units in stock
@@ -82,7 +82,7 @@ export default async function BrandPage({
         lockedFilter={{ key: "brand", value: resolved }}
       />
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
+      <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 py-12">
         {cards.length === 0 ? (
           <EmptyState
             title={`Nothing from ${resolved} matches those filters.`}
@@ -92,7 +92,7 @@ export default async function BrandPage({
             }}
           />
         ) : (
-          <ul className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
+          <ul className="grid grid-cols-2 gap-x-6 gap-y-16 md:grid-cols-3 lg:grid-cols-4 lg:gap-x-10">
             {cards.map((card, i) => (
               <li key={card.style_group ?? card.article_number}>
                 <ProductCard card={card} priority={i < 4} />

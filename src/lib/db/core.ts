@@ -53,6 +53,24 @@ function open(): DatabaseSync {
   db.exec("PRAGMA busy_timeout = 5000");
 
   db.exec(SCHEMA_SQL);
+
+  /*
+   * Columns added after the first release. CREATE TABLE IF NOT EXISTS will not
+   * add them to a database that already exists, so they are applied here and
+   * the duplicate-column error is the expected no-op on an up-to-date file.
+   */
+  for (const alter of [
+    "ALTER TABLE products ADD COLUMN cost_price REAL",
+    "ALTER TABLE products ADD COLUMN needs_review INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE stock_imports ADD COLUMN invoice_refs TEXT",
+  ]) {
+    try {
+      db.exec(alter);
+    } catch {
+      /* already present */
+    }
+  }
+
   return db;
 }
 

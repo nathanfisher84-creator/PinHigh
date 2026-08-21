@@ -54,6 +54,14 @@ export interface PreviewResult {
   sheetName?: string;
   inferred?: { key: string; header: string }[];
   ignored?: string[];
+  /** Which file shape this was read as. */
+  source?: "template" | "adidas";
+  /** adidas: invoice numbers in this file. */
+  invoices?: string[];
+  /** adidas: invoices already applied, which would double-count stock. */
+  alreadyApplied?: string[];
+  /** adidas: articles that will arrive without a name or colour. */
+  needingDetails?: string[];
 }
 
 /** Saved manual mappings, reused on later uploads (§4.1). */
@@ -161,11 +169,41 @@ export async function previewStockFile(formData: FormData): Promise<PreviewResul
 
   const diff = buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
 
+  /*
+   * An adidas file is an invoice, so applying it twice would count the same
+   * delivery into stock twice. Every invoice number this import has already
+   * seen is recorded, and a repeat is surfaced before the owner commits.
+   */
+  const invoices = parsed.billingDocuments ?? [];
+  const alreadyApplied: string[] = [];
+  if (invoices.length > 0) {
+    const seen = all<{ invoice_refs: string | null }>(
+      "SELECT invoice_refs FROM stock_imports WHERE status = 'committed' AND invoice_refs IS NOT NULL",
+    );
+    const applied = new Set<string>();
+    for (const r of seen) {
+      try {
+        for (const ref of JSON.parse(r.invoice_refs ?? "[]") as string[]) applied.add(ref);
+      } catch {
+        /* ignore a malformed record rather than block the import */
+      }
+    }
+    for (const inv of invoices) if (applied.has(inv)) alreadyApplied.push(inv);
+  }
+
+  const needingDetails = [
+    ...new Set(parsed.rows.filter((r) => r.needs_review).map((r) => r.article_number)),
+  ];
+
   return {
     ok: true,
     token: stored,
     filename: file.name,
     diff,
+    source: parsed.source ?? "template",
+    invoices,
+    alreadyApplied,
+    needingDetails,
     summary: summariseDiff(diff),
     sheetName,
     inferred: parsed.header.inferred,
@@ -228,10 +266,35 @@ export async function commitStockFile(
     // browser is holding — the catalogue may have changed since the preview.
     const diff = buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
 
+    const invoices = parsed.billingDocuments ?? [];
+
+    // Refuse to count a delivery twice unless the owner has said so explicitly.
+    if (mode === "add" && invoices.length > 0 && confirmation !== "APPLY-AGAIN") {
+      const seen = all<{ invoice_refs: string | null }>(
+        "SELECT invoice_refs FROM stock_imports WHERE status = 'committed' AND invoice_refs IS NOT NULL",
+      );
+      const applied = new Set<string>();
+      for (const r of seen) {
+        try {
+          for (const ref of JSON.parse(r.invoice_refs ?? "[]") as string[]) applied.add(ref);
+        } catch {
+          /* ignore */
+        }
+      }
+      const repeat = invoices.filter((i) => applied.has(i));
+      if (repeat.length > 0) {
+        return {
+          ok: false,
+          message: `Invoice ${repeat.join(", ")} has already been added to stock. Adding it again would count the same delivery twice.`,
+        };
+      }
+    }
+
     const result = commitImport(parsed.rows, mode, diff, {
       filename,
       storagePath: token,
       uploadedBy: actor,
+      invoiceRefs: invoices,
     });
 
     // Remember any manual mapping so the owner maps an odd column once (§4.1).

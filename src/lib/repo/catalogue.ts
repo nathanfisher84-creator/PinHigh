@@ -514,6 +514,34 @@ export function getVariantsBySku(skus: string[]): Map<string, LiveVariant> {
   return new Map(rows.map((r) => [r.sku, r]));
 }
 
+/**
+ * Headline figures for the landing page.
+ *
+ * A distributor's stock position is the most persuasive thing it has, so these
+ * are rendered at full size rather than tucked into a badge. Counts respect the
+ * same visibility rules as the catalogue, so the number on the home page and
+ * the number of things you can actually order never disagree.
+ */
+export function getCatalogueTotals(): {
+  units: number;
+  articles: number;
+  sizes: number;
+} {
+  const row = get<{ units: number; articles: number; sizes: number }>(
+    `SELECT COALESCE(SUM(v.quantity), 0) AS units,
+            COUNT(DISTINCT p.id)         AS articles,
+            COUNT(v.id)                  AS sizes
+       FROM products p
+       LEFT JOIN variants v ON v.product_id = p.id
+      WHERE ${VISIBLE}${conditionClause()}`,
+  );
+  return {
+    units: row?.units ?? 0,
+    articles: row?.articles ?? 0,
+    sizes: row?.sizes ?? 0,
+  };
+}
+
 export function getStockAsAt(): string | null {
   const value = getSetting("last_import_at");
   return value || null;

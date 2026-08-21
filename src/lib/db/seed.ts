@@ -100,7 +100,7 @@ function seedRecipients() {
 function templatePath(): string | null {
   const candidates = [
     process.env.PINHIGH_SEED_FILE,
-    path.join(process.cwd(), "seed", "pinhigh-stock-template.xlsx"),
+    path.join(process.cwd(), "seed", "adidas-delivery.xlsx"),
   ].filter(Boolean) as string[];
   return candidates.find((p) => existsSync(p)) ?? null;
 }
@@ -119,10 +119,14 @@ function seedCatalogue(): boolean {
 
   if (parsed.rows.length === 0) return false;
 
-  const diff = buildDiff(parsed.rows, "upsert", parsed.issues, parsed.rowsRead, parsed.rowsFailed);
-  commitImport(parsed.rows, "upsert", diff, {
+  const mode = parsed.source === "adidas" ? "add" : "upsert";
+  const diff = buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
+  commitImport(parsed.rows, mode, diff, {
     filename: path.basename(file),
     uploadedBy: "seed",
+    // Record the invoice so re-uploading the very same file is correctly
+    // refused rather than counting the delivery into stock a second time.
+    invoiceRefs: parsed.billingDocuments,
   });
 
   // Colour swatches for the colour switcher (§6.3). The importer does not set

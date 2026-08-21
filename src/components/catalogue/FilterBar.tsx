@@ -85,8 +85,8 @@ export function FilterBar({ facets, resultCount, lockedFilter }: Props) {
   const visibleGroups = groups.filter((g) => g.key !== lockedFilter?.key);
 
   return (
-    <div className="no-print border-b border-sand bg-paper sticky top-16 z-20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+    <div className="no-print border-y border-sand bg-paper sticky top-20 z-20">
+      <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12">
         <div className="flex items-center justify-between gap-4 py-3">
           <div className="flex items-center gap-3">
             <button

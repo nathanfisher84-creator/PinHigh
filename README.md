@@ -11,12 +11,12 @@ Built to `pinhigh-catalogue-spec.md`. Section references throughout the code
 ```bash
 npm install
 npm run dev     # http://localhost:3400
-npm test        # 99 tests
+npm test        # 114 tests
 ```
 
-The catalogue seeds itself on first run from `seed/pinhigh-stock-template.xlsx`
-— 71 articles, 311 SKUs, 13 brands — by running that file through the real
-importer. No configuration is needed to see the whole thing working.
+The catalogue seeds itself on first run from `seed/adidas-delivery.xlsx` — the
+real adidas invoice — by running it through the real importer. adidas is the
+only brand; there is no sample data. No configuration is needed.
 
 ---
 
@@ -82,7 +82,7 @@ src/
     cart/store.ts         localStorage basket, keyed by SKU
     redirects.ts          the Shopify redirect map (§14.3)
 supabase/migrations/      Postgres schema + RLS (the §2 target)
-tests/                    99 tests, node:test, no test framework dependency
+tests/                    114 tests, node:test, no test framework dependency
 ```
 
 ### Two decisions that depart from the spec
@@ -153,20 +153,64 @@ defensive code in the project.
 
 ---
 
+## The adidas delivery file
+
+This is the file the client actually receives, and it is **not a stock list**.
+It is an SAP billing export of what adidas invoiced Pin High: around sixty
+columns of accounting detail, of which four matter.
+
+| Column | Becomes |
+|---|---|
+| `Material` | the article number — six characters, `HZ6891` |
+| `AFS Grid Value` | the size — `XS`…`4XL` (not `Grid Value`, which is a numeric code) |
+| `Invoiced Quantity` | units, written `3.000` |
+| `Net value` ÷ qty | unit **cost**, admin-only |
+| `Subtotal 1` ÷ qty | unit RRP |
+
+It is detected by those columns rather than pushed through the fuzzy header
+matching, which would guess wrong on sixty columns of accounting detail. The
+Pin High stock template still imports exactly as before; both are tested.
+
+Three decisions worth knowing about:
+
+**Cost never becomes the public price.** Two figures per line and neither is a
+selling price: `Net value` is what Pin High pays adidas, `Subtotal 1` is
+adidas' gross. Cost is stored in an admin-only `cost_price` column and the
+corporate price is left null for the owner to set. Importing cost as the
+public price would put a distributor's buying terms in front of its own
+customers — the most damaging thing this importer could do.
+
+**An invoice adds; it does not replace.** A delivery arriving is not a stock
+take, so the default mode for an adidas file adds to what is on the shelf and
+leaves sizes that were not on the invoice untouched. Applying the same invoice
+twice would count the delivery twice, so every `Billing Document` number is
+recorded and a repeat is refused unless the owner types `APPLY-AGAIN`.
+
+**The file has no product names.** No name, colour, category or gender exists
+in an invoice. Articles go live under their article number — which a trade
+buyer can work with, and which §6.2 says they navigate by — flagged
+`needs_review`, and Admin → Products lists them until the owner fills in the
+rest. Nothing is invented.
+
+A caveat the owner should know: an invoice only records what came *in*.
+Nothing here decrements stock as it is sold, so the figures drift until either
+a full stock take is uploaded in "set quantities" mode, or sales are deducted
+some other way.
+
+
 ## Images
 
 Built to §5, and sharing the zip reader with the stock importer.
 
-- **Bulk zip upload.** Drop a zipped folder of supplier photographs and they
-  land on the right products. Filenames are matched to article numbers —
-  `41001_1.jpg`, `41001_2.jpg`, or a bare `41001.jpg` — against the article
-  numbers that actually exist, never by parsing the filename and hoping. That
-  matters because an article number is an opaque string and may contain the
-  very separators a naive parser would split on: `ULT365-STRIPE-M_2.jpg`
-  resolves correctly.
-- **It refuses to guess.** `41001-NAVY.jpg` does *not* get filed under article
-  41001 — that is a different colourway, and attaching a navy photograph to the
-  white product is worse than not matching at all. It is reported instead.
+- **Bulk zip upload.** Drop a zipped folder of adidas photographs and they land
+  on the right products. adidas names assets with the **article number as the
+  first six characters** — `HZ6891_Front.jpg` — and that is the rule. Matching
+  is done against the article numbers that actually exist, never by parsing the
+  filename and hoping, so an article number containing separators
+  (`ULT365-STRIPE-M_2.jpg`) resolves too.
+- **A run-on is refused.** `HZ68912.jpg` does not match HZ6891, because with no
+  separator that reads as a different article number. Digits anywhere in the
+  suffix order the photos, so `HZ6891_01_Front.jpg` sorts before `_02_`.
 - **A preview before anything is written**, listing what matched, what did not
   and why, and which products will still have no photo afterwards. The same
   shape as the stock import, because the owner has already learned that screen.

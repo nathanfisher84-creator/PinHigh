@@ -54,8 +54,8 @@ export default async function CategoryPage({
 
   return (
     <>
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-10 pb-6">
-        <h1 className="text-3xl display-xl">{label}</h1>
+      <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 pt-14 pb-8">
+        <h1 className="display text-4xl lg:text-6xl">{label}</h1>
         <p className="mt-2 max-w-2xl text-graphite-ink">
           Enter quantities against the sizes you need and send it to our team as
           a quote request.
@@ -68,7 +68,7 @@ export default async function CategoryPage({
         lockedFilter={{ key: "category", value: category }}
       />
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
+      <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 py-12">
         {cards.length === 0 ? (
           <EmptyState
             title={`No ${label.toLowerCase()} match those filters.`}
@@ -76,7 +76,7 @@ export default async function CategoryPage({
             action={{ href: `/catalogue/${category}`, label: `Show all ${label.toLowerCase()}` }}
           />
         ) : (
-          <ul className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
+          <ul className="grid grid-cols-2 gap-x-6 gap-y-16 md:grid-cols-3 lg:grid-cols-4 lg:gap-x-10">
             {cards.map((card, i) => (
               <li key={card.style_group ?? card.article_number}>
                 <ProductCard card={card} priority={i < 4} />

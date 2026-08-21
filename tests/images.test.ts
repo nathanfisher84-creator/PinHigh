@@ -11,7 +11,7 @@ import { defaultAltText } from "@/lib/images/process";
  * the shapes a real pack actually arrives in.
  */
 
-const ARTICLES = ["41001", "41002", "41270", "ULT365-STRIPE-M", "00417"];
+const ARTICLES = ["41001", "41002", "41270", "ULT365-STRIPE-M", "00417", "HZ6891", "KS2292"];
 
 const files = (...paths: string[]) => paths.map((path) => ({ path }));
 
@@ -69,13 +69,29 @@ describe("matching filenames to article numbers", () => {
     assert.equal(r.matched[0].article_number, "00417");
   });
 
-  test("a colourway suffix is NOT filed under the base article", () => {
-    // "41001-NAVY" is a different product. Guessing here would attach a navy
-    // photograph to the white colourway, which is worse than not matching.
+  test("a separated suffix is read as an asset descriptor, not a new article", () => {
+    /*
+     * A deliberate trade-off, and worth stating.
+     *
+     * adidas names its photographs `HZ6891_Front.jpg` — article number, a
+     * separator, then whatever their asset system produced. There is no way to
+     * tell that apart from `41001-NAVY.jpg` by pattern alone, so one of the two
+     * has to win.
+     *
+     * The adidas rule wins, because that is the format the client actually
+     * receives, and because in adidas' numbering each colourway has its own
+     * article number (HZ6891, HZ6892, ...) — colour is never a filename suffix.
+     * The protection that remains is that the prefix must be a real article
+     * number, and that a run-on with no separator is refused.
+     */
     const r = matchImageFilenames(files("41001-NAVY.jpg"), ARTICLES);
-    assert.equal(r.matched.length, 0);
-    assert.equal(r.unmatched.length, 1);
-    assert.match(r.unmatched[0].reason, /No article number/);
+    assert.equal(r.matched.length, 1);
+    assert.equal(r.matched[0].article_number, "41001");
+  });
+
+  test("a longer article number wins over a shorter one that prefixes it", () => {
+    const r = matchImageFilenames(files("41001-X_1.jpg"), [...ARTICLES, "41001-X"]);
+    assert.equal(r.matched[0].article_number, "41001-X");
   });
 
   test("an unknown article number is reported, not invented", () => {
@@ -97,6 +113,52 @@ describe("matching filenames to article numbers", () => {
       ARTICLES,
     );
     assert.deepEqual(r.articlesCovered, ["41001", "41270"]);
+  });
+});
+
+describe("adidas photo filenames", () => {
+  // adidas ships assets whose first six characters are the article number and
+  // whose suffix is whatever their system produced.
+  test("first six characters identify the article", () => {
+    const r = matchImageFilenames(files("HZ6891.jpg"), ARTICLES);
+    assert.equal(r.matched[0].article_number, "HZ6891");
+  });
+
+  test("an adidas asset suffix still resolves", () => {
+    for (const name of [
+      "HZ6891_Front.jpg",
+      "HZ6891_01_Standard.jpg",
+      "HZ6891 (1).jpg",
+      "HZ6891-detail.png",
+      "HZ6891.Standard.jpg",
+    ]) {
+      const r = matchImageFilenames(files(name), ARTICLES);
+      assert.equal(r.matched.length, 1, name);
+      assert.equal(r.matched[0].article_number, "HZ6891", name);
+    }
+  });
+
+  test("digits anywhere in the suffix order the photos", () => {
+    const r = matchImageFilenames(
+      files("HZ6891_03_Back.jpg", "HZ6891_01_Front.jpg", "HZ6891_02_Side.jpg"),
+      ARTICLES,
+    );
+    assert.deepEqual(r.matched.map((m) => m.sequence), [1, 2, 3]);
+  });
+
+  test("running straight on into more characters is refused", () => {
+    // "HZ68912" reads as a different article number, not HZ6891 photo 2.
+    const r = matchImageFilenames(files("HZ68912.jpg"), ARTICLES);
+    assert.equal(r.matched.length, 0);
+    assert.equal(r.unmatched.length, 1);
+  });
+
+  test("a second adidas article in the same pack lands separately", () => {
+    const r = matchImageFilenames(
+      files("HZ6891_1.jpg", "KS2292_1.jpg", "KS2292_2.jpg"),
+      ARTICLES,
+    );
+    assert.deepEqual(r.articlesCovered, ["HZ6891", "KS2292"]);
   });
 });
 

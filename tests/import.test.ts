@@ -22,7 +22,8 @@ import {
  * real owner's file is likely to have.
  */
 
-const TEMPLATE = path.join(import.meta.dirname, "..", "seed", "pinhigh-stock-template.xlsx");
+const TEMPLATE = path.join(import.meta.dirname, "fixtures", "pinhigh-stock-template.xlsx");
+const ADIDAS = path.join(import.meta.dirname, "fixtures", "adidas-delivery.xlsx");
 
 function loadTemplate() {
   const wb = readWorkbook(readFileSync(TEMPLATE), "pinhigh-stock-template.xlsx");
@@ -90,6 +91,90 @@ describe("reading the supplied template", () => {
     const parsed = parseStockSheet(loadTemplate().rows);
     const preOwned = parsed.rows.filter((r) => r.condition === "pre-owned");
     assert.ok(preOwned.length > 0, "the template contains pre-owned stock");
+  });
+});
+
+describe("the adidas delivery file", () => {
+  /*
+   * The real file the client receives. It is an SAP billing export, not a
+   * stock list: sixty-odd accounting columns, of which four matter.
+   */
+  function loadAdidas() {
+    const wb = readWorkbook(readFileSync(ADIDAS), "adidas-delivery.xlsx");
+    return pickStockSheet(wb);
+  }
+
+  test("is detected by its own signature, not by fuzzy header matching", () => {
+    const parsed = parseStockSheet(loadAdidas().rows);
+    assert.equal(parsed.source, "adidas");
+    assert.deepEqual(parsed.header.missingRequired, []);
+  });
+
+  test("an ordinary stock sheet is still read as the template", () => {
+    const wb = readWorkbook(readFileSync(TEMPLATE), "template.xlsx");
+    const parsed = parseStockSheet(pickStockSheet(wb).rows);
+    assert.notEqual(parsed.source, "adidas");
+  });
+
+  test("Material becomes the article number and AFS Grid Value the size", () => {
+    const parsed = parseStockSheet(loadAdidas().rows);
+    const articles = [...new Set(parsed.rows.map((r) => r.article_number))];
+    assert.deepEqual(articles, ["HZ6891", "HZ6892", "HZ6893", "HZ6894", "KS2292"]);
+    assert.ok(articles.every((a) => a.length === 6), "adidas article numbers are six characters");
+
+    const run = parsed.rows
+      .filter((r) => r.article_number === "HZ6893")
+      .sort((a, b) => a.size_order - b.size_order)
+      .map((r) => r.size);
+    assert.deepEqual(run, ["S", "M", "L", "XL", "2XL", "3XL", "4XL"]);
+  });
+
+  test("quantities read through SAP's three decimal places", () => {
+    const parsed = parseStockSheet(loadAdidas().rows);
+    const total = parsed.rows.reduce((n, r) => n + r.quantity, 0);
+    assert.equal(total, 750);
+    assert.equal(parsed.rowsFailed, 0);
+  });
+
+  test("the trailing totals row is skipped without an error", () => {
+    // SAP appends a line with no Material and figures in the numeric columns.
+    const parsed = parseStockSheet(loadAdidas().rows);
+    assert.equal(parsed.rows.length, 35);
+    assert.equal(parsed.issues.filter((i) => i.level === "error").length, 0);
+  });
+
+  test("cost is kept out of the public price", () => {
+    /*
+     * The single most damaging thing this importer could do is publish what
+     * Pin High pays adidas as the price its own customers see.
+     */
+    const parsed = parseStockSheet(loadAdidas().rows);
+    const row = parsed.rows.find((r) => r.article_number === "HZ6891")!;
+    assert.equal(row.cost_price, 56.85, "unit cost is derived from Net value");
+    assert.equal(row.rrp, 111.48, "RRP comes from the gross line value");
+    assert.equal(row.price_wholesale, null, "the selling price is the owner's call");
+  });
+
+  test("articles arrive flagged for review, since the file has no names", () => {
+    const parsed = parseStockSheet(loadAdidas().rows);
+    assert.ok(parsed.rows.every((r) => r.needs_review));
+    assert.ok(parsed.rows.every((r) => r.brand === "adidas"));
+    // The article number stands in as the name until the owner renames it.
+    assert.ok(parsed.rows.every((r) => r.style_name === r.article_number));
+  });
+
+  test("the invoice number is captured so a delivery cannot be counted twice", () => {
+    const parsed = parseStockSheet(loadAdidas().rows);
+    assert.deepEqual(parsed.billingDocuments, ["5101901080"]);
+    assert.deepEqual(parsed.purchaseOrders, ["FW2026 2"]);
+  });
+
+  test("every SKU is unique and derived from article plus size", () => {
+    const parsed = parseStockSheet(loadAdidas().rows);
+    const skus = new Set(parsed.rows.map((r) => r.sku));
+    assert.equal(skus.size, parsed.rows.length);
+    assert.ok(skus.has("HZ6891-M"));
+    assert.ok(skus.has("HZ6893-4XL"));
   });
 });
 

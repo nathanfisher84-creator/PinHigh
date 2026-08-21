@@ -41,6 +41,13 @@
   --color-fairway-wash: #edf2ef;
   --color-flag-wash: #fbeeec;
 
+  /* Fairway used as a *ground* rather than an accent. The deep end of the
+     brand colour, for full-bleed sections. */
+  --color-fairway-deep: #16382a;
+  --color-fairway-line: #2f5d4a;
+  --color-on-fairway: #eef2ef;
+  --color-on-fairway-dim: #9db3a8;
+
   /* -- Type ---------------------------------------------------------------- */
   --font-display: "Switzer", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -66,7 +73,16 @@
   --text-4xl: 3rem;
   --text-4xl--line-height: 3.125rem;
   --text-5xl: 4rem;
-  --text-5xl--line-height: 4rem;
+  --text-5xl--line-height: 3.9rem;
+  /* Editorial display sizes. A yardage book is a *precision instrument*, and
+     the way that reads on screen is scale contrast: a very large heading set
+     against a very small mono label, with nothing in between competing. */
+  --text-6xl: 5.5rem;
+  --text-6xl--line-height: 5.1rem;
+  --text-7xl: 7.5rem;
+  --text-7xl--line-height: 6.9rem;
+  --text-8xl: 10rem;
+  --text-8xl--line-height: 9rem;
 
   /* -- Border radius. Hard ceiling of 4px (§10). --------------------------- */
   --radius-none: 0px;
@@ -227,4 +243,68 @@
   .no-print {
     display: none !important;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Editorial utilities
+
+   The first version of this site put a hairline box around everything, which
+   is what made it read as generic. Separation now comes from whitespace,
+   scale and a single rule where a rule genuinely helps.
+   ------------------------------------------------------------------------ */
+
+/* Display type. Tight tracking and optical alignment at large sizes. */
+@utility display {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 0.94;
+  text-wrap: balance;
+}
+
+@utility display-tight {
+  letter-spacing: -0.045em;
+  line-height: 0.9;
+}
+
+/* A dark full-bleed section. */
+@utility on-fairway {
+  background-color: var(--color-fairway-deep);
+  color: var(--color-on-fairway);
+}
+
+/* Hairline that belongs to the grid rather than boxing content in. */
+@utility rule-top {
+  border-top: 1px solid var(--color-sand);
+}
+
+@utility rule-strong {
+  border-top: 1px solid var(--color-ink);
+}
+
+/* The measure a column of running text should never exceed. */
+@utility measure {
+  max-width: 34rem;
+}
+
+/* Big tabular figures, used as a design element in their own right — this is
+   a stock business and the numbers are the most honest thing on the page. */
+@utility figure-xl {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+/* Underline that grows on hover — the only decorative motion on the site. */
+@utility link-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  transition: background-size 150ms var(--ease-out-quiet);
+}
+@utility link-underline-on {
+  background-size: 100% 1px;
 }

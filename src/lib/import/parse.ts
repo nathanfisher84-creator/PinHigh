@@ -8,6 +8,7 @@ import {
 } from "@/lib/domain/types";
 import { deriveSku, normaliseSize, sizeOrder } from "@/lib/domain/sizes";
 import { findHeaderRow, matchHeaders, type ColumnMap, type FieldKey, type HeaderMatch } from "./columns";
+import { detectAdidasFormat, parseAdidasSheet } from "./adidas";
 
 /**
  * Turn a parsed sheet into candidate SKU rows, with every problem the owner
@@ -33,6 +34,10 @@ export interface ParsedRow {
   quantity: number;
   price_wholesale: number | null;
   rrp: number | null;
+  /** Admin-only cost, carried by the adidas invoice. Never shown publicly. */
+  cost_price?: number | null;
+  /** Set when the source had no name, colour, category or gender. */
+  needs_review?: boolean;
   case_pack: number | null;
   moq: number | null;
   season: string | null;
@@ -60,6 +65,11 @@ export interface ParseResult {
   rowsRead: number;
   /** Rows dropped because they could not be made valid. */
   rowsFailed: number;
+  /** Which file shape this was read as. */
+  source?: "template" | "adidas";
+  /** adidas only: invoice numbers, used to refuse a double-import. */
+  billingDocuments?: string[];
+  purchaseOrders?: string[];
 }
 
 /* -------------------------------------------------------------------------
@@ -262,6 +272,34 @@ export function parseStockSheet(
 ): ParseResult {
   const issues: RowIssue[] = [];
 
+  /*
+   * The adidas delivery file is an SAP billing export with none of the columns
+   * below. It is detected by its own signature and parsed separately rather
+   * than being forced through fuzzy header matching, which would guess wrong
+   * on sixty columns of accounting detail.
+   */
+  const adidasHeaderRow = sheetRows.findIndex((r) => r && detectAdidasFormat(r));
+  if (adidasHeaderRow !== -1) {
+    const parsed = parseAdidasSheet(sheetRows);
+    return {
+      header: {
+        map: {},
+        headers: (sheetRows[adidasHeaderRow] ?? []).map((h) => h ?? ""),
+        unmatched: [],
+        missingRequired: [],
+        inferred: [],
+      },
+      headerRowIndex: adidasHeaderRow,
+      rows: parsed.rows,
+      issues: parsed.issues,
+      rowsRead: parsed.rowsRead,
+      rowsFailed: parsed.rowsFailed,
+      source: "adidas",
+      billingDocuments: parsed.billingDocuments,
+      purchaseOrders: parsed.purchaseOrders,
+    };
+  }
+
   const headerRowIndex = findHeaderRow(sheetRows);
   const header = matchHeaders(sheetRows[headerRowIndex] ?? [], options.savedMap);
 
@@ -441,6 +479,8 @@ export function parseStockSheet(
       moq: parseInteger(cell(row, "moq")),
       season: cell(row, "season") || null,
       is_discontinued: parseBoolean(cell(row, "is_discontinued")),
+      cost_price: null,
+      needs_review: false,
       sku: deriveSku(article, size),
     };
 

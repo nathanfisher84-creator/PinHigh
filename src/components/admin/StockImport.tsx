@@ -23,6 +23,7 @@ import { units } from "@/lib/format";
 export function StockImport() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [mode, setMode] = useState<ImportMode>("upsert");
+  const isAdidas = preview?.source === "adidas";
   const [confirmation, setConfirmation] = useState("");
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [mapping, setMapping] = useState<Record<string, number>>({});
@@ -41,7 +42,11 @@ export function StockImport() {
       if (overrideMapping && Object.keys(overrideMapping).length > 0) {
         formData.set("mapping", JSON.stringify(overrideMapping));
       }
-      setPreview(await previewStockFile(formData));
+      const result = await previewStockFile(formData);
+      setPreview(result);
+      // An adidas file is a delivery: it adds to the shelf rather than
+      // replacing what is on it.
+      if (result.source === "adidas" && mode !== "add") setMode("add");
     });
   };
 
@@ -87,10 +92,11 @@ export function StockImport() {
           dragging ? "border-fairway bg-fairway-wash" : "bg-paper-raised",
         ].join(" ")}
       >
-        <p className="font-medium">Drop your stock file here</p>
-        <p className="mt-1 text-sm text-graphite-ink">
-          .xlsx, .xls or .csv — up to 10 MB. Extra columns are ignored, so your
-          working notes are safe.
+        <p className="font-medium">Drop your adidas file here</p>
+        <p className="mt-1 text-sm text-graphite-ink max-w-lg mx-auto">
+          The invoice spreadsheet adidas send you, exactly as it arrives — all
+          sixty columns of it. A stock sheet in the Pin High template works too.
+          .xlsx, .xls or .csv, up to 10 MB.
         </p>
         <label className="mt-4 inline-block">
           <span className="cursor-pointer bg-fairway px-4 py-2 text-sm text-paper hover:bg-ink transition-colors duration-150 inline-block">
@@ -332,9 +338,67 @@ export function StockImport() {
             </details>
           )}
 
+          {/* An invoice already applied would double-count the delivery. */}
+          {preview.alreadyApplied && preview.alreadyApplied.length > 0 && (
+            <section className="mt-6 hairline border-flag bg-flag-wash px-4 py-4">
+              <h3 className="font-medium text-flag-ink">
+                Invoice {preview.alreadyApplied.join(", ")} has already been added
+              </h3>
+              <p className="mt-1 text-sm">
+                Adding it again would count the same delivery into stock twice.
+                If you are sure this is a second shipment on the same invoice
+                number, type <strong>APPLY-AGAIN</strong> below.
+              </p>
+            </section>
+          )}
+
+          {/* What the invoice cannot tell us. */}
+          {preview.needingDetails && preview.needingDetails.length > 0 && (
+            <section className="mt-6 hairline bg-paper-raised px-4 py-4">
+              <h3 className="font-medium">
+                {preview.needingDetails.length}{" "}
+                {preview.needingDetails.length === 1 ? "article needs" : "articles need"}{" "}
+                a name and colour afterwards
+              </h3>
+              <p className="mt-1 text-sm text-graphite-ink">
+                An adidas invoice carries article numbers, sizes and quantities —
+                not product names or colours. These go live under their article
+                number, and Products will list them until you fill in the rest.
+              </p>
+              <p className="tabular mt-2 text-xs text-graphite-ink">
+                {preview.needingDetails.join(", ")}
+              </p>
+            </section>
+          )}
+
           {/* Mode (§4.2 step 4). Safe option preselected. */}
           <fieldset className="mt-8">
             <legend className="label-caps mb-2">What should happen</legend>
+
+            {isAdidas && (
+              <label className="mb-2 flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
+                <input
+                  type="radio"
+                  name="mode"
+                  value="add"
+                  checked={mode === "add"}
+                  onChange={() => {
+                    setMode("add");
+                    if (fileRef.current) upload(fileRef.current, mapping);
+                  }}
+                  className="mt-1 accent-[var(--color-fairway)]"
+                />
+                <span>
+                  <strong>Add this delivery to stock</strong>{" "}
+                  <span className="text-xs text-graphite-ink">(recommended)</span>
+                  <span className="block text-sm text-graphite-ink">
+                    Quantities are added to what is already on the shelf. Sizes
+                    not on this invoice are left exactly as they are. This is what
+                    you want when adidas have sent you a shipment.
+                  </span>
+                </span>
+              </label>
+            )}
 
             <label className="flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
               <input
@@ -349,8 +413,10 @@ export function StockImport() {
                 className="mt-1 accent-[var(--color-fairway)]"
               />
               <span>
-                <strong>Update quantities</strong>{" "}
-                <span className="text-xs text-graphite-ink">(recommended)</span>
+                <strong>Set quantities to this file</strong>
+                {!isAdidas && (
+                  <span className="text-xs text-graphite-ink"> (recommended)</span>
+                )}
                 <span className="block text-sm text-graphite-ink">
                   Sizes in this file are updated. Sizes not in it go to 0 but stay
                   on the site, ready to come back.
@@ -379,10 +445,13 @@ export function StockImport() {
               </span>
             </label>
 
-            {mode === "replace" && (
+            {(mode === "replace" ||
+              (mode === "add" && (preview.alreadyApplied?.length ?? 0) > 0)) && (
               <div className="mt-3">
                 <label htmlFor="confirm-replace" className="block text-sm mb-1">
-                  Type <strong>REPLACE</strong> to confirm
+                  Type{" "}
+                  <strong>{mode === "replace" ? "REPLACE" : "APPLY-AGAIN"}</strong>{" "}
+                  to confirm
                 </label>
                 <input
                   id="confirm-replace"
@@ -399,7 +468,11 @@ export function StockImport() {
               type="button"
               onClick={commit}
               disabled={
-                pending || (mode === "replace" && confirmation.trim().toUpperCase() !== "REPLACE")
+                pending ||
+                (mode === "replace" && confirmation.trim().toUpperCase() !== "REPLACE") ||
+                (mode === "add" &&
+                  (preview.alreadyApplied?.length ?? 0) > 0 &&
+                  confirmation.trim().toUpperCase() !== "APPLY-AGAIN")
               }
               className={[
                 "px-5 py-2.5 text-paper font-medium transition-colors duration-150 disabled:opacity-60",
@@ -410,7 +483,9 @@ export function StockImport() {
                 ? "Applying…"
                 : mode === "replace"
                   ? "Replace the catalogue"
-                  : "Apply this update"}
+                  : mode === "add"
+                    ? "Add this delivery"
+                    : "Apply this update"}
             </button>
             <button
               type="button"

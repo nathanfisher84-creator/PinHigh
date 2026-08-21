@@ -144,13 +144,33 @@ export async function saveProduct(id: string, formData: FormData) {
     return Number.isFinite(n) ? n : null;
   };
 
+  const colour = String(formData.get("colour") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim();
+  const gender = String(formData.get("gender") ?? "").trim();
+  const styleName = String(formData.get("style_name") ?? "").trim();
+
+  /*
+   * An article imported from an adidas invoice arrives with no name, colour,
+   * category or gender. It stops "needing review" the moment it has a name and
+   * a colour that are not just the article number echoed back.
+   */
+  const reviewed =
+    styleName.length > 0 &&
+    styleName !== String(formData.get("article_number") ?? "") &&
+    colour.length > 0;
+
   run(
     `UPDATE products SET
-       style_name = ?, description = ?, fabric = ?, season = ?, colour_hex = ?,
+       style_name = ?, colour = ?, category = ?, gender = ?,
+       description = ?, fabric = ?, season = ?, colour_hex = ?,
        price_wholesale = ?, rrp = ?, case_pack = ?, moq = ?,
-       is_visible = ?, is_discontinued = ?, sort_order = ?, updated_at = ?
+       is_visible = ?, is_discontinued = ?, sort_order = ?,
+       needs_review = ?, updated_at = ?
      WHERE id = ?`,
-    String(formData.get("style_name") ?? ""),
+    styleName,
+    colour,
+    category,
+    gender,
     String(formData.get("description") ?? "") || null,
     String(formData.get("fabric") ?? "") || null,
     String(formData.get("season") ?? "") || null,
@@ -162,6 +182,7 @@ export async function saveProduct(id: string, formData: FormData) {
     formData.get("is_visible") === "on" ? 1 : 0,
     formData.get("is_discontinued") === "on" ? 1 : 0,
     num("sort_order") ?? 0,
+    reviewed ? 0 : 1,
     now(),
     id,
   );
@@ -169,6 +190,7 @@ export async function saveProduct(id: string, formData: FormData) {
   audit("product.update", id);
   revalidatePath("/admin/products");
   revalidatePath("/catalogue");
+  revalidatePath("/");
 }
 
 export async function setProductVisibility(ids: string[], visible: boolean) {

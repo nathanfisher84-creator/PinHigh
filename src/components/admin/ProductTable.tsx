@@ -7,7 +7,13 @@ import type { AdminProductRow } from "@/app/admin/(protected)/products/page";
 import type { ProductImageRow } from "@/lib/repo/images";
 import { ImageManager } from "./ImageManager";
 import { amount } from "@/lib/format";
-import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
+import {
+  CATEGORIES,
+  CATEGORY_LABELS,
+  GENDERS,
+  GENDER_LABELS,
+  type Category,
+} from "@/lib/domain/types";
 
 /**
  * Product list with inline editing and bulk visibility (spec §9).
@@ -170,6 +176,11 @@ export function ProductTable({
                         {p.condition}
                       </span>
                     )}
+                    {!!p.needs_review && (
+                      <span className="block text-2xs text-flag-ink uppercase tracking-wider">
+                        Needs details
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <button
@@ -194,13 +205,71 @@ export function ProductTable({
                         }
                         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
                       >
+                        <input type="hidden" name="article_number" value={p.article_number} />
+
                         <Input label="Style name" name="style_name" defaultValue={p.style_name} className="lg:col-span-2" />
+                        <Input label="Colour" name="colour" defaultValue={p.colour} placeholder="e.g. Wonder Clay" />
+                        <Input label="Swatch hex" name="colour_hex" defaultValue={p.colour_hex ?? ""} placeholder="#E8A0B4" />
+
+                        <div>
+                          <label htmlFor={`cat-${p.id}`} className="label-caps block mb-1">
+                            Category
+                          </label>
+                          <select
+                            id={`cat-${p.id}`}
+                            name="category"
+                            defaultValue={p.category}
+                            className="w-full hairline bg-paper-raised px-3 py-2 text-sm focus:outline-none focus:border-fairway"
+                          >
+                            {CATEGORIES.map((c) => (
+                              <option key={c} value={c}>
+                                {CATEGORY_LABELS[c]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label htmlFor={`gen-${p.id}`} className="label-caps block mb-1">
+                            Fit
+                          </label>
+                          <select
+                            id={`gen-${p.id}`}
+                            name="gender"
+                            defaultValue={p.gender}
+                            className="w-full hairline bg-paper-raised px-3 py-2 text-sm focus:outline-none focus:border-fairway"
+                          >
+                            {GENDERS.map((g) => (
+                              <option key={g} value={g}>
+                                {GENDER_LABELS[g]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
                         <Input label="Season" name="season" defaultValue={p.season ?? ""} />
-                        <Input label="Swatch hex" name="colour_hex" defaultValue={p.colour_hex ?? ""} placeholder="#1B2A4A" />
 
                         <Input label="Fabric" name="fabric" defaultValue={p.fabric ?? ""} className="lg:col-span-2" />
-                        <Input label="Corporate price (AED)" name="price_wholesale" defaultValue={p.price_wholesale ?? ""} numeric />
+                        <Input
+                          label="Corporate price (AED)"
+                          name="price_wholesale"
+                          defaultValue={p.price_wholesale ?? ""}
+                          numeric
+                          help="What the customer sees. Your margin call."
+                        />
                         <Input label="Retail price (AED)" name="rrp" defaultValue={p.rrp ?? ""} numeric />
+
+                        {/* Read-only. Cost comes from the adidas invoice and is
+                            never rendered on the public site. */}
+                        <div>
+                          <span className="label-caps block mb-1">Cost from adidas</span>
+                          <p className="tabular hairline bg-paper-sunken px-3 py-2 text-sm text-graphite-ink">
+                            {p.cost_price === null ? "—" : amount(p.cost_price)}
+                          </p>
+                          <p className="mt-1 text-xs text-graphite-ink">
+                            Never shown to customers.
+                          </p>
+                        </div>
 
                         <Input label="Case pack" name="case_pack" defaultValue={p.case_pack ?? ""} numeric />
                         <Input label="MOQ" name="moq" defaultValue={p.moq ?? ""} numeric />
@@ -284,6 +353,7 @@ function Input({
   defaultValue,
   placeholder,
   numeric,
+  help,
   className = "",
 }: {
   label: string;
@@ -291,6 +361,7 @@ function Input({
   defaultValue?: string | number;
   placeholder?: string;
   numeric?: boolean;
+  help?: string;
   className?: string;
 }) {
   return (
@@ -308,6 +379,7 @@ function Input({
           numeric ? "tabular" : ""
         }`}
       />
+      {help && <p className="mt-1 text-xs text-graphite-ink">{help}</p>}
     </div>
   );
 }

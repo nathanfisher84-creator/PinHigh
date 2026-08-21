@@ -2,12 +2,22 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Facet } from "@/lib/repo/catalogue";
 import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
 import { stockAsAt } from "@/lib/format";
 import { useCartTotals } from "@/lib/cart/store";
 import { Wordmark } from "./Wordmark";
+
+/**
+ * Site header.
+ *
+ * Deliberately quiet: a wordmark, four words of navigation, a search field and
+ * the running total. The first version carried a second row of brand links and
+ * a stock date badge, which made the top of every page busier than the content
+ * underneath it. Pin High sells one brand now, so the brand rail earned
+ * nothing and is gone.
+ */
 
 interface Props {
   brands: Facet[];
@@ -16,121 +26,111 @@ interface Props {
   announcement: string;
 }
 
-export function SiteHeader({ brands, categories, stockDate, announcement }: Props) {
+const NAV = [
+  { href: "/catalogue", label: "Catalogue" },
+  { href: "/about", label: "About" },
+  { href: "/contact", label: "Contact" },
+];
+
+export function SiteHeader({ categories, stockDate, announcement }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const searchRef = useRef<HTMLInputElement>(null);
   const totals = useCartTotals();
 
-  // Close the mobile menu on navigation — leaving it open over the new page is
-  // the classic mobile nav bug.
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
 
+  if (pathname.startsWith("/admin")) return null;
+
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const q = query.trim();
-    if (!q) return;
-    router.push(`/catalogue?q=${encodeURIComponent(q)}`);
+    if (q) router.push(`/catalogue?q=${encodeURIComponent(q)}`);
   };
-
-  if (pathname.startsWith("/admin")) return null;
 
   return (
     <>
       {announcement && (
-        <div className="bg-fairway text-paper text-center text-sm px-4 py-2">
-          {announcement}
-        </div>
+        <div className="on-fairway text-center text-sm px-4 py-2.5">{announcement}</div>
       )}
 
-      <header className="no-print border-b border-sand bg-paper sticky top-0 z-30">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="flex items-center justify-between gap-4 h-16">
-            <Link href="/" className="shrink-0" aria-label="Pin High UAE, home">
-              <Wordmark className="h-7 w-auto text-fairway" />
+      <header className="no-print sticky top-0 z-30 bg-paper/95 backdrop-blur-sm">
+        <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12">
+          <div className="flex h-20 items-center justify-between gap-8 border-b border-sand">
+            <Link href="/" aria-label="Pin High UAE, home" className="shrink-0">
+              <Wordmark className="h-7 w-auto text-ink" />
             </Link>
 
-            <nav aria-label="Main" className="hidden lg:flex items-center gap-6 text-sm">
-              <Link href="/catalogue" className="hover:text-fairway transition-colors duration-150">
-                Catalogue
-              </Link>
-              <Link href="/brands" className="hover:text-fairway transition-colors duration-150">
-                Brands
-              </Link>
-              <Link href="/about" className="hover:text-fairway transition-colors duration-150">
-                About
-              </Link>
-              <Link href="/contact" className="hover:text-fairway transition-colors duration-150">
-                Contact
-              </Link>
+            <nav
+              aria-label="Main"
+              className="hidden lg:flex items-center gap-9 text-sm"
+            >
+              {NAV.map((item) => {
+                const active = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={[
+                      "link-underline hover:link-underline-on py-1",
+                      active ? "link-underline-on" : "",
+                    ].join(" ")}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
             </nav>
 
-            <form
-              onSubmit={submitSearch}
-              role="search"
-              className="hidden md:flex items-center flex-1 max-w-xs"
-            >
-              <label htmlFor="site-search" className="sr-only">
-                Search the catalogue by style, colour or article number
-              </label>
-              <input
-                id="site-search"
-                ref={searchRef}
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Style, colour or article no."
-                className="w-full hairline bg-paper-raised px-3 py-2 text-sm placeholder:text-graphite-ink focus:outline-none focus:border-fairway"
-              />
-            </form>
+            <div className="flex items-center gap-5">
+              <form
+                onSubmit={submitSearch}
+                role="search"
+                className="hidden md:block w-56"
+              >
+                <label htmlFor="site-search" className="sr-only">
+                  Search by style or article number
+                </label>
+                <input
+                  id="site-search"
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search"
+                  className="w-full border-0 border-b border-sand bg-transparent pb-1.5 text-sm placeholder:text-graphite-ink focus:border-ink focus:outline-none transition-colors duration-150"
+                />
+              </form>
 
-            <div className="flex items-center gap-3">
               {totals.units > 0 && (
                 <Link
                   href="/quote"
-                  className="hidden sm:block tabular text-sm text-fairway font-medium"
+                  className="tabular text-sm bg-ink px-3.5 py-2 text-paper hover:bg-fairway transition-colors duration-150"
                 >
-                  {totals.units} units
+                  {totals.units}
+                  <span className="sr-only"> units in your order</span>
                 </Link>
               )}
+
               <button
                 type="button"
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-expanded={menuOpen}
                 aria-controls="mobile-menu"
-                className="lg:hidden hairline px-3 py-2 text-sm"
+                className="lg:hidden label-caps text-ink"
               >
                 {menuOpen ? "Close" : "Menu"}
               </button>
             </div>
           </div>
-
-          {/* Brand-first navigation. §6.2: a buyer wants adidas polos, not
-              polos, so brands lead and categories follow. */}
-          <div className="hidden lg:flex items-center gap-4 h-10 overflow-x-auto scroll-x text-xs">
-            <span className="label-caps shrink-0">Brands</span>
-            {brands.slice(0, 10).map((b) => (
-              <Link
-                key={b.value}
-                href={`/brand/${encodeURIComponent(b.value.toLowerCase())}`}
-                className="shrink-0 text-graphite-ink hover:text-fairway transition-colors duration-150"
-              >
-                {b.label}
-              </Link>
-            ))}
-            <span className="ml-auto shrink-0 tabular text-graphite-ink">
-              {stockAsAt(stockDate)}
-            </span>
-          </div>
         </div>
 
         {menuOpen && (
-          <div id="mobile-menu" className="lg:hidden border-t border-sand bg-paper-raised">
-            <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 space-y-5">
+          <div id="mobile-menu" className="lg:hidden border-b border-sand bg-paper">
+            <div className="mx-auto max-w-[110rem] px-5 sm:px-8 py-8 space-y-8">
               <form onSubmit={submitSearch} role="search" className="md:hidden">
                 <label htmlFor="mobile-search" className="sr-only">
                   Search the catalogue
@@ -140,48 +140,41 @@ export function SiteHeader({ brands, categories, stockDate, announcement }: Prop
                   type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Style, colour or article no."
-                  className="w-full hairline bg-paper px-3 py-2.5 text-sm focus:outline-none focus:border-fairway"
+                  placeholder="Style or article number"
+                  className="w-full border-0 border-b border-sand bg-transparent pb-2 text-lg focus:border-ink focus:outline-none"
                 />
               </form>
 
-              <nav aria-label="Categories">
-                <p className="label-caps mb-2">Categories</p>
-                <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  {categories.map((c) => (
-                    <li key={c.value}>
-                      <Link href={`/catalogue/${c.value}`} className="block py-1">
-                        {CATEGORY_LABELS[c.value as Category] ?? c.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+              <nav aria-label="Main" className="space-y-1">
+                {NAV.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="block display text-3xl py-1"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
               </nav>
 
-              <nav aria-label="Brands">
-                <p className="label-caps mb-2">Brands</p>
-                <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  {brands.map((b) => (
-                    <li key={b.value}>
-                      <Link
-                        href={`/brand/${encodeURIComponent(b.value.toLowerCase())}`}
-                        className="block py-1"
-                      >
-                        {b.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
+              {categories.length > 0 && (
+                <nav aria-label="Categories">
+                  <p className="label-caps mb-3">Categories</p>
+                  <ul className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                    {categories.map((c) => (
+                      <li key={c.value}>
+                        <Link href={`/catalogue/${c.value}`} className="block py-1">
+                          {CATEGORY_LABELS[c.value as Category] ?? c.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+              )}
 
-              <nav aria-label="More" className="rule pt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                <Link href="/about">About</Link>
-                <Link href="/contact">Contact</Link>
-                <Link href="/terms">Terms</Link>
-                <Link href="/privacy">Privacy</Link>
-              </nav>
-
-              <p className="tabular text-xs text-graphite-ink">{stockAsAt(stockDate)}</p>
+              <p className="tabular text-xs text-graphite-ink rule-top pt-5">
+                {stockAsAt(stockDate)}
+              </p>
             </div>
           </div>
         )}

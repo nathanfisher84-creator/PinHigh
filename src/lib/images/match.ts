@@ -1,9 +1,13 @@
 /**
  * Matching supplier photo filenames to article numbers (spec §5).
  *
- * "Auto-match filenames to products by article number, using the pattern
- * `{article_number}_{n}.jpg` — `41001_1.jpg`, `41001_2.jpg`. Also accept a bare
- * `41001.jpg`."
+ * adidas ships photographs whose **first six characters are the article
+ * number** — `HZ6891_...jpg` for article HZ6891 — and the rest of the filename
+ * is whatever their asset system produced. That is the rule that matters here.
+ *
+ * §5 also describes `{article_number}_{n}.jpg` and a bare `41001.jpg`; both
+ * still work, because all three are the same rule seen from different angles:
+ * a filename belongs to the article number it starts with.
  *
  * The trap here is that an article number is an opaque string (§3) and may
  * itself contain hyphens or underscores — `ULT365-STRIPE-M_2.jpg` is a
@@ -94,30 +98,40 @@ export function matchImageFilenames(
       continue;
     }
 
-    // Otherwise the stem should be an article number followed by a separator
-    // and a sequence: "41001_2.jpg", "41001-2.jpg", "ULT365-STRIPE-M_2.jpg".
+    /*
+     * Otherwise the filename should *start* with an article number. Longest
+     * first, so a longer article number wins over a shorter one that happens
+     * to be its prefix.
+     *
+     * The remainder decides what happens next, and this is the part worth
+     * being careful about:
+     *
+     *   - Nothing, or a separator and digits, or a separator and any adidas
+     *     asset suffix (`HZ6891_Front`, `HZ6891 (1)`) — this is a photo of
+     *     that article. Digits found anywhere in the remainder order it.
+     *
+     *   - Characters that run straight on with no separator — `41001NAVY` —
+     *     are refused, because that reads as a different article number
+     *     rather than a suffix on this one.
+     *
+     * The separator requirement is what stops `41001-NAVY.jpg` being filed
+     * under article 41001. That is a different colourway, and hanging a navy
+     * photograph on the white product is worse than not matching at all.
+     */
     let hit: { article: string; sequence: number } | null = null;
 
     for (const article of byLength) {
-      const a = norm(article);
-      const s = norm(stem);
-      if (!s.startsWith(a)) continue;
+      if (!norm(stem).startsWith(norm(article))) continue;
 
       const rest = stem.slice(article.length);
-      // The remainder, once separators are stripped, must be only digits —
-      // otherwise "41001-NAVY.jpg" would be filed under article 41001, which
-      // is a different colourway and therefore a different product.
-      const seq = rest.replace(/^[\s_-]+/, "");
-      if (/^\d{1,3}$/.test(seq)) {
-        hit = { article, sequence: Number(seq) };
-        break;
-      }
-      // Handle the normalised case where separators differ in length.
-      const restNorm = s.slice(a.length);
-      if (/^\d{1,3}$/.test(restNorm)) {
-        hit = { article, sequence: Number(restNorm) };
-        break;
-      }
+
+      // Ran straight on into more characters: a different article number.
+      if (rest.length > 0 && !/^[\s._-]/.test(rest)) continue;
+
+      const suffix = rest.replace(/^[\s._-]+/, "");
+      const digits = suffix.match(/\d{1,3}/);
+      hit = { article, sequence: digits ? Number(digits[0]) : 0 };
+      break;
     }
 
     if (hit) {

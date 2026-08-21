@@ -36,6 +36,13 @@ CREATE TABLE IF NOT EXISTS products (
   season            TEXT,
   price_wholesale   REAL,
   rrp               REAL,
+  -- What Pin High paid adidas. Admin-only and never rendered publicly —
+  -- the invoice import carries it, and exposing a distributor's cost to its
+  -- own customers would be a commercial own goal.
+  cost_price        REAL,
+  -- Set when a product arrived from an invoice with no name, colour, category
+  -- or gender. The admin lists these until the owner fills them in.
+  needs_review      INTEGER NOT NULL DEFAULT 0,
   case_pack         INTEGER,
   moq               INTEGER,
   is_visible        INTEGER NOT NULL DEFAULT 1,
@@ -75,7 +82,7 @@ CREATE TABLE IF NOT EXISTS stock_imports (
   filename        TEXT NOT NULL,
   storage_path    TEXT,
   uploaded_by     TEXT,
-  mode            TEXT NOT NULL CHECK (mode IN ('replace','upsert')),
+  mode            TEXT NOT NULL CHECK (mode IN ('replace','upsert','add')),
   rows_total      INTEGER NOT NULL DEFAULT 0,
   rows_created    INTEGER NOT NULL DEFAULT 0,
   rows_updated    INTEGER NOT NULL DEFAULT 0,
@@ -85,6 +92,9 @@ CREATE TABLE IF NOT EXISTS stock_imports (
   snapshot_before TEXT,
   status          TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending','committed','rolled_back','failed')),
+  -- adidas invoice numbers applied by this import, so the same delivery
+  -- cannot be counted into stock twice.
+  invoice_refs    TEXT,
   created_at      TEXT NOT NULL
 );
 

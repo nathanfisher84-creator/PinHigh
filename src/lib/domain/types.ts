@@ -75,6 +75,9 @@ export interface Product {
   season: string | null;
   price_wholesale: number | null;
   rrp: number | null;
+  /** Admin-only. Never rendered publicly. */
+  cost_price: number | null;
+  needs_review: boolean;
   case_pack: number | null;
   moq: number | null;
   is_visible: boolean;
