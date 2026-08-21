@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Reads go to a database that can sit an ocean away from the build
+  // machine; give prerendering headroom over the 60s default.
+  staticPageGenerationTimeout: 120,
   // Native/wasm-backed packages stay out of the bundler's dependency graph:
   // pg (net sockets), PGlite (wasm assets on disk), sharp (native binaries).
   serverExternalPackages: ["pg", "@electric-sql/pglite", "sharp"],
