@@ -69,7 +69,11 @@ async function storageFetch(pathname: string, init: RequestInit): Promise<Respon
   return fetch(`${SUPABASE_URL}${pathname}`, {
     ...init,
     headers: {
+      // Both headers, so either key generation works: the legacy JWT
+      // service_role key authenticates via Authorization, the newer
+      // sb_secret_... keys via apikey.
       Authorization: `Bearer ${SERVICE_KEY}`,
+      apikey: SERVICE_KEY as string,
       ...(init.headers ?? {}),
     },
   });
