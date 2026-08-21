@@ -7,7 +7,7 @@ import { SizeGrid } from "./SizeGrid";
 import { ProductImage } from "@/components/catalogue/ProductImage";
 import { ConditionTag } from "@/components/catalogue/ConditionTag";
 import { useCart } from "@/lib/cart/store";
-import { money, units } from "@/lib/format";
+import { units } from "@/lib/format";
 
 /**
  * The colour switcher and the grid it drives (spec §6.3).
@@ -165,15 +165,7 @@ export function ColourwayPanel({ runs, initialArticle, brand, styleName }: Props
                     >
                       {run.colour}
                     </button>
-                    <span className="tabular shrink-0">
-                      {units(qty)}
-                      {run.price_wholesale !== null && (
-                        <span className="text-graphite-ink">
-                          {" "}
-                          · {money(qty * run.price_wholesale)}
-                        </span>
-                      )}
-                    </span>
+                    <span className="tabular shrink-0">{units(qty)}</span>
                   </li>
                 ))}
               </ul>

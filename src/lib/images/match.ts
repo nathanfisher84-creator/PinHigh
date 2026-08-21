@@ -42,8 +42,63 @@ export interface UnmatchedFile {
 export interface MatchResult {
   matched: MatchedFile[];
   unmatched: UnmatchedFile[];
+  /** CAD line drawings, deliberately left out rather than reported as a problem. */
+  skippedCad: string[];
   /** Article numbers that got at least one photo in this pack. */
   articlesCovered: string[];
+}
+
+/**
+ * adidas ships a CAD line drawing alongside the photography, named as a
+ * numbered variant of a view — `HZ6891_Standard View-1.jpeg`,
+ * `IS7344_Back View-1.jpeg`. They are flat technical illustrations, not
+ * product shots, and putting one on a catalogue page next to real photographs
+ * looks like a mistake. They are skipped, and counted separately so a pack of
+ * 164 files does not report 21 "problems" that are not problems.
+ */
+export function isCadDrawing(filename: string): boolean {
+  const stem = filename.replace(IMAGE_EXT, "").trim();
+
+  const numbered = stem.match(/^(.*?)[\s._-]*-(\d+)$/);
+  if (!numbered) return false;
+
+  /*
+   * A trailing number alone is not enough to call something a CAD: §5's own
+   * convention is `{article}_{n}.jpg`, and `41002-1.jpg` is photo one of
+   * article 41002.
+   *
+   * What marks a CAD is that the number qualifies a *named view* —
+   * `Standard View-1`, `Back View-1`. So the token immediately before the
+   * number has to be a word. An article number is not.
+   */
+  const lastToken = numbered[1].split(/[\s_]+/).pop() ?? "";
+  return /[A-Za-z]{2,}/.test(lastToken);
+}
+
+/**
+ * Which photograph leads.
+ *
+ * The ghost-mannequin "Standard View" is the shot adidas uses as its own hero
+ * and is the one a buyer recognises, so it takes the card. Everything else
+ * falls in behind it in the order someone would flip through them.
+ */
+const VIEW_ORDER: [RegExp, number][] = [
+  [/standard\s*view/i, 0],
+  [/front\s*view/i, 1],
+  [/F_Torso/i, 2],
+  [/back\s*view/i, 3],
+  [/B_Torso/i, 4],
+  [/side\s*view/i, 5],
+  [/back\s*cent(er|re)\s*view/i, 6],
+];
+
+export function viewRank(suffix: string): number {
+  // Back Center View also matches "back view", so the most specific wins.
+  if (/back\s*cent(er|re)/i.test(suffix)) return 6;
+  for (const [re, rank] of VIEW_ORDER) {
+    if (re.test(suffix)) return rank;
+  }
+  return 7;
 }
 
 const IMAGE_EXT = /\.(jpe?g|png|webp|avif|gif|tiff?)$/i;
@@ -74,10 +129,16 @@ export function matchImageFilenames(
 
   const matched: MatchedFile[] = [];
   const unmatched: UnmatchedFile[] = [];
+  const skippedCad: string[] = [];
   const covered = new Set<string>();
 
   for (const file of files) {
     const filename = file.path.split("/").pop() ?? file.path;
+
+    if (IMAGE_EXT.test(filename) && isCadDrawing(filename)) {
+      skippedCad.push(filename);
+      continue;
+    }
 
     if (!IMAGE_EXT.test(filename)) {
       unmatched.push({
@@ -129,8 +190,17 @@ export function matchImageFilenames(
       if (rest.length > 0 && !/^[\s._-]/.test(rest)) continue;
 
       const suffix = rest.replace(/^[\s._-]+/, "");
-      const digits = suffix.match(/\d{1,3}/);
-      hit = { article, sequence: digits ? Number(digits[0]) : 0 };
+      /*
+       * adidas names the view rather than numbering it, so ordering comes from
+       * which view it is. A number at the front of the suffix still wins where
+       * there is one, which keeps `41001_1.jpg` and `HZ6891_03_Back.jpg`
+       * working for anyone using that convention.
+       */
+      const leading = suffix.match(/^(\d{1,3})(?:\D|$)/);
+      hit = {
+        article,
+        sequence: leading ? Number(leading[1]) : viewRank(suffix),
+      };
       break;
     }
 
@@ -159,5 +229,5 @@ export function matchImageFilenames(
       a.filename.localeCompare(b.filename),
   );
 
-  return { matched, unmatched, articlesCovered: [...covered].sort() };
+  return { matched, unmatched, skippedCad, articlesCovered: [...covered].sort() };
 }

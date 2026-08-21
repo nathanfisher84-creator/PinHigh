@@ -86,8 +86,9 @@ export function SiteFooter({
             <div className="col-span-2 sm:col-span-1">
               <h2 className="label-caps text-on-fairway-dim mb-4">How pricing works</h2>
               <p className="text-sm text-on-fairway-dim measure">
-                Everything here is a quote request. Nothing is charged online and
-                no price is final until our team confirms it.
+                Everything here is a quote request. We price each one on its own —
+                quantity, branding and delivery together — so there are no prices
+                on the site and nothing is charged online.
               </p>
               <p className="tabular mt-4 text-xs text-on-fairway-dim">
                 {stockAsAt(stockDate)}
@@ -97,8 +98,8 @@ export function SiteFooter({
         </div>
 
         <div className="mt-16 flex flex-col gap-2 border-t border-fairway-line py-8 text-xs text-on-fairway-dim sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} Pin High UAE. Prices in AED, excluding 5% VAT.</p>
-          <p>Indicative — excludes VAT, branding and delivery.</p>
+          <p>© {new Date().getFullYear()} Pin High UAE.</p>
+          <p>Quoted in AED, excluding 5% VAT.</p>
         </div>
       </div>
     </footer>

@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
    * deployed lambda boots to an empty catalogue.
    */
   outputFileTracingIncludes: {
+    // Includes seed/images, which is how a fresh instance comes up with
+    // photography rather than placeholders.
     "/**": ["./seed/**"],
   },
   experimental: {

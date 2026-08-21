@@ -151,6 +151,8 @@ export interface ZipPreview {
   /** Visible products still without a photo after this pack is applied. */
   stillWithout?: string[];
   totalImages?: number;
+  /** CAD line drawings left out — reported so the count adds up, not as a problem. */
+  cadSkipped?: number;
 }
 
 export async function previewImageZip(formData: FormData): Promise<ZipPreview> {
@@ -226,6 +228,7 @@ export async function previewImageZip(formData: FormData): Promise<ZipPreview> {
     unmatched: result.unmatched.map((u) => ({ filename: u.filename, reason: u.reason })),
     stillWithout,
     totalImages: result.matched.length,
+    cadSkipped: result.skippedCad.length,
   };
 }
 

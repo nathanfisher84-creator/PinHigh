@@ -4,7 +4,7 @@ import { getSettings } from "@/lib/db";
 export const metadata: Metadata = {
   title: "Terms",
   description:
-    "Terms covering quote requests, indicative pricing, availability and branding at Pin High UAE.",
+    "Terms covering quote requests, pricing, availability and branding at Pin High UAE.",
 };
 
 /**
@@ -42,17 +42,16 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="Prices are indicative">
+        <Section title="We do not publish prices">
           <p>
-            Prices shown are indicative unit prices in UAE Dirhams, exclusive of
-            5% VAT, branding and delivery. They are a guide to help you scope what
-            you need. The price that counts is the one on the written quotation we
-            send you, which accounts for the quantity, the branding, the delivery
-            and anything else specific to your order.
+            No price appears on this site. What a corporate order costs depends on
+            the quantity, the branding and the delivery, and a figure on a product
+            page would be wrong for most of the people reading it.
           </p>
           <p className="mt-3">
-            Recommended retail prices are shown for comparison only and are not
-            prices we charge.
+            The price that counts is the one on the written quotation we send you.
+            Quotations are in UAE Dirhams and exclusive of 5% VAT unless they say
+            otherwise.
           </p>
         </Section>
 
@@ -91,9 +90,10 @@ export default function TermsPage() {
 
         <Section title="VAT and invoicing">
           <p>
-            All prices on this site exclude UAE VAT at 5%. Your tax invoice is
-            raised by our sales team on confirmation of the order, not by this
-            site. Give us your TRN if you have one so it appears on the invoice.
+            Quotations exclude UAE VAT at 5% unless they say otherwise. Your tax
+            invoice is raised by our sales team on confirmation of the order, not
+            by this site. Give us your TRN if you have one so it appears on the
+            invoice.
           </p>
         </Section>
 

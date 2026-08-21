@@ -71,6 +71,13 @@ export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: bool
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://pinhighuae.com";
   const responseHours = process.env.QUOTE_RESPONSE_HOURS ?? "24";
 
+  /*
+   * The sales team's copy carries the indicative figures they need to price
+   * the job. The buyer's copy does not: no price appears anywhere on the
+   * public site, and a figure arriving by email would undo that.
+   */
+  const showPrices = !isBuyerCopy;
+
   const rows = quote.lines
     .map(
       (l) => `
@@ -80,9 +87,13 @@ export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: bool
       <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4">${esc(l.colour)}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4;font-family:monospace">${esc(l.size)}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4;font-family:monospace;text-align:right">${l.quantity}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4;font-family:monospace;text-align:right">${
-        l.unit_price === null ? "—" : l.unit_price.toFixed(2)
-      }</td>
+      ${
+        showPrices
+          ? `<td style="padding:6px 10px;border-bottom:1px solid #D8D2C4;font-family:monospace;text-align:right">${
+              l.unit_price === null ? "—" : l.unit_price.toFixed(2)
+            }</td>`
+          : ""
+      }
       <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4">${
         l.branding_placements?.length ? esc(l.branding_placements.join(", ")) : "—"
       }</td>
@@ -161,7 +172,7 @@ export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: bool
           <th style="padding:6px 10px">Colour</th>
           <th style="padding:6px 10px">Size</th>
           <th style="padding:6px 10px;text-align:right">Qty</th>
-          <th style="padding:6px 10px;text-align:right">Unit</th>
+          ${showPrices ? '<th style="padding:6px 10px;text-align:right">Unit</th>' : ""}
           <th style="padding:6px 10px">Branding</th>
         </tr>
       </thead>
@@ -170,15 +181,24 @@ export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: bool
         <tr style="border-top:2px solid #14181A;font-weight:600">
           <td colspan="4" style="padding:8px 10px">Total</td>
           <td style="padding:8px 10px;font-family:monospace;text-align:right">${quote.total_units}</td>
-          <td style="padding:8px 10px;font-family:monospace;text-align:right">${money(quote.indicative_value)}</td>
+          ${
+            showPrices
+              ? `<td style="padding:8px 10px;font-family:monospace;text-align:right">${money(
+                  quote.indicative_value,
+                )}</td>`
+              : ""
+          }
           <td></td>
         </tr>
       </tfoot>
     </table>
 
     <p style="margin:16px 0 0;font-size:12px;color:#5A6165">
-      Indicative — excludes 5% VAT, branding and delivery. Nothing is reserved and no
-      price is final until confirmed by our team.
+      ${
+        showPrices
+          ? "Indicative — excludes 5% VAT, branding and delivery. Nothing is reserved and no price is final until confirmed by our team."
+          : "We price each request on its own — quantity, branding and delivery together. Nothing is reserved and nothing has been charged."
+      }
     </p>
 
     ${

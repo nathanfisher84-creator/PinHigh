@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { CatalogueCard } from "@/lib/repo/catalogue";
 import type { Condition } from "@/lib/domain/types";
-import { money, PRICE_CAVEAT_SHORT } from "@/lib/format";
+import { PRICE_ON_REQUEST } from "@/lib/format";
 import { ProductImage } from "./ProductImage";
 import { AvailabilityStrip } from "./AvailabilityStrip";
 import { ConditionTag } from "./ConditionTag";
@@ -111,16 +111,7 @@ export function ProductCard({ card, priority }: { card: CatalogueCard; priority?
           </div>
         )}
 
-        <p className="tabular mt-3 text-sm">
-          {card.price_wholesale === null ? (
-            <span className="text-graphite-ink">Price on request</span>
-          ) : (
-            <span className="font-medium">{money(card.price_wholesale)}</span>
-          )}
-        </p>
-        {card.price_wholesale !== null && (
-          <p className="text-2xs text-graphite-ink">{PRICE_CAVEAT_SHORT}</p>
-        )}
+        <p className="mt-3 text-sm text-graphite-ink">{PRICE_ON_REQUEST}</p>
       </div>
     </article>
   );

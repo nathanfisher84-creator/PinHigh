@@ -44,7 +44,25 @@ export async function putImage(key: string, data: Buffer): Promise<void> {
   await writeFile(full, data);
 }
 
+/**
+ * Seed photography lives in the deployment bundle, already encoded.
+ *
+ * It is read straight from there rather than copied into the writable store:
+ * on Vercel every instance has its own empty /tmp, so copying would mean
+ * re-doing the work on every cold start — and the lambda is frozen once it has
+ * responded, so background copying would not finish anyway.
+ */
+const SEED_PREFIX = "seed/";
+const SEED_DIR = path.join(process.cwd(), "seed", "images");
+
 export async function getImage(key: string): Promise<Buffer | null> {
+  if (key.startsWith(SEED_PREFIX)) {
+    const name = path.basename(key.slice(SEED_PREFIX.length));
+    const full = path.join(SEED_DIR, name);
+    if (!full.startsWith(SEED_DIR) || !existsSync(full)) return null;
+    return readFile(full);
+  }
+
   const full = resolve(key);
   if (!existsSync(full)) return null;
   return readFile(full);

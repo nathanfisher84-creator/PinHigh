@@ -6,7 +6,7 @@ import { getSettings } from "@/lib/db";
 import { waMeLink } from "@/lib/notify/whatsapp";
 import { REFERENCE_PATTERN } from "@/lib/validation/quote";
 import { PrintButton } from "@/components/ui/PrintButton";
-import { amount, formatDate, money, PRICE_CAVEAT, units } from "@/lib/format";
+import { formatDate, PRICE_NOTE, units } from "@/lib/format";
 
 /**
  * Confirmation (spec §7.2 step 6).
@@ -94,7 +94,6 @@ export default async function QuoteConfirmationPage({ params }: { params: Params
                 <th scope="col" className="px-4 py-2 text-left label-caps">Colour</th>
                 <th scope="col" className="px-4 py-2 text-left label-caps">Size</th>
                 <th scope="col" className="px-4 py-2 text-right label-caps">Qty</th>
-                <th scope="col" className="px-4 py-2 text-right label-caps">Unit</th>
                 <th scope="col" className="px-4 py-2 text-left label-caps">Branding</th>
               </tr>
             </thead>
@@ -109,9 +108,6 @@ export default async function QuoteConfirmationPage({ params }: { params: Params
                   <td className="px-4 py-2">{line.colour}</td>
                   <td className="px-4 py-2 tabular">{line.size}</td>
                   <td className="px-4 py-2 text-right tabular">{line.quantity}</td>
-                  <td className="px-4 py-2 text-right tabular text-graphite-ink">
-                    {amount(line.unit_price)}
-                  </td>
                   <td className="px-4 py-2 text-xs">
                     {line.branding_placements?.length
                       ? line.branding_placements.join(", ")
@@ -126,9 +122,6 @@ export default async function QuoteConfirmationPage({ params }: { params: Params
                   Total
                 </td>
                 <td className="px-4 py-3 text-right tabular">{quote.total_units}</td>
-                <td className="px-4 py-3 text-right tabular">
-                  {money(quote.indicative_value)}
-                </td>
                 <td />
               </tr>
             </tfoot>
@@ -136,8 +129,9 @@ export default async function QuoteConfirmationPage({ params }: { params: Params
         </div>
 
         <p className="mt-3 text-xs text-graphite-ink">
-          {PRICE_CAVEAT}. {quote.has_branding && "Branding is quoted separately. "}
-          These figures are what you specified — they are not a quotation.
+          {PRICE_NOTE}{" "}
+          {quote.has_branding && "Branding is quoted separately. "}
+          This is what you specified — our team will come back with the price.
         </p>
       </section>
 

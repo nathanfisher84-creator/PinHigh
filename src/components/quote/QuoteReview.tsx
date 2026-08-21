@@ -15,7 +15,7 @@ import {
 import { reviewCart, type ReviewState } from "@/app/actions/review";
 import { submitQuoteRequest } from "@/app/actions/quote";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { amount, money, PRICE_CAVEAT, stockAsAt, units } from "@/lib/format";
+import { PRICE_NOTE, PRICE_ON_REQUEST, stockAsAt, units } from "@/lib/format";
 import { EMIRATES } from "@/lib/domain/types";
 import { PHONE_COUNTRIES, trnHint } from "@/lib/validation/quote";
 
@@ -203,18 +203,13 @@ export function QuoteReview() {
                     <tr className="border-b border-sand">
                       <th scope="col" className="px-4 py-2 text-left label-caps">Size</th>
                       <th scope="col" className="px-4 py-2 text-right label-caps">Qty</th>
-                      <th scope="col" className="px-4 py-2 text-right label-caps">Unit</th>
-                      <th scope="col" className="px-4 py-2 text-right label-caps">Line</th>
                       <th scope="col" className="px-2 py-2 text-right">
                         <span className="sr-only">Remove</span>
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {group.lines.map((line) => {
-                      const state = stateBySku.get(line.sku);
-                      const price = state?.unit_price ?? line.unit_price;
-                      return (
+                    {group.lines.map((line) => (
                         <tr key={line.sku} className="border-b border-sand last:border-0">
                           <td className="px-4 py-2 tabular">{line.size}</td>
                           <td className="px-4 py-2 text-right">
@@ -233,12 +228,6 @@ export function QuoteReview() {
                               className="w-20 hairline bg-paper px-2 py-1 text-right focus:outline-none focus:border-fairway"
                             />
                           </td>
-                          <td className="px-4 py-2 text-right tabular text-graphite-ink">
-                            {amount(price)}
-                          </td>
-                          <td className="px-4 py-2 text-right tabular">
-                            {price === null ? "—" : amount(price * line.quantity)}
-                          </td>
                           <td className="px-2 py-2 text-right">
                             <button
                               type="button"
@@ -250,8 +239,7 @@ export function QuoteReview() {
                             </button>
                           </td>
                         </tr>
-                      );
-                    })}
+                    ))}
                   </tbody>
                 </table>
 
@@ -335,9 +323,8 @@ export function QuoteReview() {
                   </div>
                 )}
 
-                <footer className="border-t border-sand px-4 py-2 flex justify-between text-sm">
-                  <span className="text-graphite-ink">{units(group.units)}</span>
-                  <span className="tabular font-medium">{money(group.value)}</span>
+                <footer className="border-t border-sand px-4 py-2 text-sm text-graphite-ink">
+                  {units(group.units)}
                 </footer>
               </section>
             );
@@ -538,13 +525,13 @@ export function QuoteReview() {
                 <dd className="tabular">{cartTotals.brandedLines}</dd>
               </div>
             )}
-            <div className="flex justify-between gap-4 rule pt-3">
-              <dt className="font-medium">Indicative value</dt>
-              <dd className="tabular font-bold">{money(cartTotals.value)}</dd>
+            <div className="rule pt-3">
+              <dt className="font-medium">Price</dt>
+              <dd className="mt-1 text-graphite-ink">{PRICE_ON_REQUEST}</dd>
             </div>
           </dl>
 
-          <p className="mt-3 text-xs text-graphite-ink">{PRICE_CAVEAT}.</p>
+          <p className="mt-3 text-xs text-graphite-ink">{PRICE_NOTE}</p>
           {cartTotals.hasBranding && (
             <p className="mt-1 text-xs text-graphite-ink">Branding quoted separately.</p>
           )}

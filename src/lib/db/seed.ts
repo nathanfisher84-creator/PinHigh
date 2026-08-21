@@ -1,11 +1,12 @@
 import "server-only";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { all, get, now, run, setSetting, uid } from "./core";
 import { readWorkbook, pickStockSheet } from "@/lib/xlsx/read";
 import { parseStockSheet } from "@/lib/import/parse";
 import { buildDiff, commitImport } from "@/lib/import/commit";
 import { CATEGORIES } from "@/lib/domain/types";
+import { defaultAltText } from "@/lib/images/process";
 
 /**
  * First-run bootstrap.
@@ -143,6 +144,21 @@ function seedCatalogue(): boolean {
   const existing = get<{ n: number }>("SELECT COUNT(*) AS n FROM products");
   if ((existing?.n ?? 0) > 0) return false;
 
+  /*
+   * `next build` prerenders across several worker processes and each one boots
+   * the app, so two can both see an empty catalogue and both seed. With the
+   * invoice importing in "add" mode that doubled the stock — 1,500 units
+   * instead of 750. This claim is atomic in SQLite, so exactly one process
+   * wins and the rest return.
+   */
+  const claim = run(
+    `INSERT INTO settings (key, value, updated_at) VALUES ('seed_claim', ?, ?)
+     ON CONFLICT(key) DO NOTHING`,
+    String(process.pid),
+    now(),
+  );
+  if (Number(claim.changes ?? 0) === 0) return false;
+
   // Order matters: the template defines the products, the invoice fills in
   // the stock against them.
   const template =
@@ -204,6 +220,61 @@ function applyColourHex() {
 }
 
 /* -------------------------------------------------------------------------
+   Product photography
+   ---------------------------------------------------------------------- */
+
+/**
+ * Register the hero photograph that ships in the bundle.
+ *
+ * The renditions in `seed/images` are already encoded, so this only writes
+ * database rows — no image processing happens at boot. That matters on Vercel,
+ * where each instance starts with an empty /tmp and is frozen the moment it has
+ * responded, so anything slow or deferred would simply never finish.
+ *
+ * One image per article. The full pack, with all five views, goes in through
+ * Admin → Products.
+ */
+function seedImages(): number {
+  const dir = path.join(process.cwd(), "seed", "images");
+  if (!existsSync(dir)) return 0;
+
+  const existing = get<{ n: number }>("SELECT COUNT(*) AS n FROM product_images");
+  if ((existing?.n ?? 0) > 0) return 0;
+
+  // Largest rendition per article: `HZ6891-800.webp`.
+  const widest = new Map<string, { file: string; width: number }>();
+  for (const file of readdirSync(dir)) {
+    const m = file.match(/^([A-Za-z0-9]+)-(\d+)\.webp$/);
+    if (!m) continue;
+    const [, article, width] = m;
+    const seen = widest.get(article);
+    if (!seen || Number(width) > seen.width) {
+      widest.set(article, { file, width: Number(width) });
+    }
+  }
+
+  let added = 0;
+  for (const [article, { file }] of widest) {
+    const product = get<{ id: string; brand: string; style_name: string; colour: string }>(
+      "SELECT id, brand, style_name, colour FROM products WHERE article_number = ?",
+      article,
+    );
+    if (!product) continue;
+
+    run(
+      `INSERT INTO product_images (id, product_id, storage_path, alt_text, is_primary, sort_order)
+       VALUES (?,?,?,?,1,0)`,
+      uid(),
+      product.id,
+      `seed/${file}`,
+      defaultAltText(product.brand, product.style_name, product.colour),
+    );
+    added++;
+  }
+  return added;
+}
+
+/* -------------------------------------------------------------------------
    Entry point
    ---------------------------------------------------------------------- */
 
@@ -215,6 +286,8 @@ export function ensureSeeded(): void {
     seedBrandingPlacements();
     seedRecipients();
     const seeded = seedCatalogue();
+
+    if (seeded) seedImages();
 
     if (seeded && !get("SELECT 1 FROM settings WHERE key = 'seeded_at'")) {
       setSetting("seeded_at", now());

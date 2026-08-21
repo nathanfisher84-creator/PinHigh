@@ -36,7 +36,23 @@ export function units(n: number): string {
   return `${n.toLocaleString("en-AE")} ${n === 1 ? "unit" : "units"}`;
 }
 
-/** The label every price carries (§6.2, §7.1). */
+/**
+ * Pricing is not shown on the public site.
+ *
+ * Corporate pricing depends on quantity, branding and delivery, and a figure
+ * on a product page invites a buyer to anchor on it before any of that is
+ * known — which the sales team then has to argue back from. Every public
+ * surface says this instead, and the real numbers live in the admin panel and
+ * in the quote the team sends.
+ *
+ * `money()` and `amount()` are still used by the admin and by the notification
+ * the sales team receives. They must not reach a public page.
+ */
+export const PRICE_ON_REQUEST = "Price on request";
+export const PRICE_NOTE =
+  "We price each request on its own — quantity, branding and delivery together.";
+
+/** Retained for the admin and the internal notification only. */
 export const PRICE_CAVEAT = "Indicative — excl. VAT, branding and delivery";
 export const PRICE_CAVEAT_SHORT = "Indicative · excl. VAT";
 

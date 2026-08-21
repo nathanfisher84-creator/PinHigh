@@ -3,7 +3,7 @@
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { setQuantity, useCart } from "@/lib/cart/store";
 import { stockBarHeight, stockLevel } from "@/lib/domain/sizes";
-import { amount, money, PRICE_CAVEAT_SHORT, units } from "@/lib/format";
+import { PRICE_ON_REQUEST, units } from "@/lib/format";
 
 /**
  * The size grid (spec §6.3) — the heart of the product page.
@@ -76,7 +76,6 @@ export function SizeGrid({
   }, [cart.lines]);
 
   const styleUnits = sorted.reduce((n, v) => n + (quantities.get(v.sku) ?? 0), 0);
-  const styleValue = styleUnits * (unit_price ?? 0);
 
   const setNote = useCallback((sku: string, message: string | null) => {
     setNotes((prev) => {
@@ -363,12 +362,8 @@ export function SizeGrid({
             </span>
           )}
         </p>
-        {styleUnits > 0 && unit_price !== null && (
-          <p className="text-sm tabular">
-            <span className="text-graphite-ink">{amount(unit_price)} × {styleUnits} = </span>
-            <strong className="font-bold">{money(styleValue)}</strong>
-            <span className="text-graphite-ink text-xs"> · {PRICE_CAVEAT_SHORT}</span>
-          </p>
+        {styleUnits > 0 && (
+          <p className="text-sm text-graphite-ink">{PRICE_ON_REQUEST}</p>
         )}
       </div>
 

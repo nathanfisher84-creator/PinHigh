@@ -11,7 +11,7 @@ Built to `pinhigh-catalogue-spec.md`. Section references throughout the code
 ```bash
 npm install
 npm run dev     # http://localhost:3400
-npm test        # 125 tests
+npm test        # 131 tests
 ```
 
 The catalogue seeds itself on first run by running both real adidas files
@@ -83,7 +83,7 @@ src/
     cart/store.ts         localStorage basket, keyed by SKU
     redirects.ts          the Shopify redirect map (§14.3)
 supabase/migrations/      Postgres schema + RLS (the §2 target)
-tests/                    125 tests, node:test, no test framework dependency
+tests/                    131 tests, node:test, no test framework dependency
 ```
 
 ### Two decisions that depart from the spec
@@ -154,6 +154,25 @@ defensive code in the project.
 
 ---
 
+## No prices on the public site
+
+Nothing on the buyer-facing site shows a price. Every product, size grid,
+basket and confirmation says **Price on request**, because what a corporate
+order costs depends on the quantity, the branding and the delivery — a figure
+on a product page would be wrong for most of the people reading it, and the
+sales team would spend the call arguing back from it.
+
+The numbers still exist and are still used. Cost and RRP come off the adidas
+files into admin-only columns, the corporate price is set per product in the
+admin, and `indicative_value` is still stored on every quote request so the
+team can see what a job is worth before pricing it. The line is drawn at what a
+buyer sees: the sales team's notification carries the figures, the buyer's copy
+of the same email does not.
+
+`money()` and `amount()` are for the admin and the internal notification only —
+there is a grep in the verification steps to keep them off public pages.
+
+
 ## The two adidas files
 
 adidas send two SAP exports and they do different jobs. Both are detected by
@@ -217,33 +236,45 @@ stock as it is sold, so the figures drift until a stock take is uploaded.
 
 Built to §5, and sharing the zip reader with the stock importer.
 
-- **Bulk zip upload.** Drop a zipped folder of adidas photographs and they land
-  on the right products. adidas names assets with the **article number as the
-  first six characters** — `HZ6891_Front.jpg` — and that is the rule. Matching
-  is done against the article numbers that actually exist, never by parsing the
-  filename and hoping, so an article number containing separators
-  (`ULT365-STRIPE-M_2.jpg`) resolves too.
-- **A run-on is refused.** `HZ68912.jpg` does not match HZ6891, because with no
-  separator that reads as a different article number. Digits anywhere in the
-  suffix order the photos, so `HZ6891_01_Front.jpg` sorts before `_02_`.
+adidas ship a pack of around 160 JPEGs named `{ARTICLE}_{View}.jpeg` — the
+first six characters are the article number, which is the whole matching rule.
+Drop the zip into Admin → Products and it sorts itself out.
+
+- **The CAD drawings are left out.** Alongside each photograph adidas include a
+  flat technical illustration, named as a numbered variant of a view —
+  `HZ6891_Standard View-1.jpeg`, `IS7344_Back View-1.jpeg`. On a catalogue page
+  next to real photography they read as a mistake, so they are skipped and
+  counted separately rather than reported as 21 problems.
+  The discriminator is that the number qualifies a *named view*: `41002-1.jpg`
+  is still photo one of article 41002 under §5's own convention.
+- **The ghost-mannequin shot leads.** `Standard View` is what adidas uses as
+  its own hero and what a buyer recognises, so it takes the card and the top of
+  the product page. Front, back, side and back-centre fall in behind it.
 - **A preview before anything is written**, listing what matched, what did not
-  and why, and which products will still have no photo afterwards. The same
-  shape as the stock import, because the owner has already learned that screen.
+  and why, how many CADs were skipped, and which products will still have no
+  photo afterwards.
 - **Windows zips work.** PowerShell's Compress-Archive writes backslash path
-  separators rather than the forward slashes the zip spec calls for. Before
-  that was handled, every photo inside a sub-folder silently failed to match.
-  There is a regression test with a hand-built zip.
+  separators rather than the forward slashes the zip spec calls for. Before that
+  was handled, every photo inside a sub-folder silently failed to match. There
+  is a regression test with a hand-built zip.
 - **Processing**: converted to WebP at 400/800/1600, never upscaled beyond the
-  source, and all EXIF stripped — supplier photographs routinely carry GPS
-  coordinates and photographer names.
-- macOS resource forks (`__MACOSX/`, `._name`) and `Thumbs.db` are dropped
-  rather than reported as unmatched, so the list that needs attention stays
-  short.
+  source, and all EXIF stripped.
+- macOS resource forks and `Thumbs.db` are dropped rather than reported.
+
+Against the real pack: 164 files, 21 CADs skipped, 143 photographs matched,
+nothing unmatched, all 23 articles covered.
+
+One hero photograph per article ships in `seed/images`, pre-encoded, so a fresh
+instance comes up looking like a catalogue rather than a grid of placeholders.
+They are read straight from the bundle rather than copied into the writable
+store — on Vercel every instance starts with an empty `/tmp` and is frozen once
+it has responded, so anything deferred would never finish.
 
 Per product, the admin has drag-and-drop upload, reordering, a primary
 selection and editable alt text. Reordering uses explicit move buttons rather
 than pointer dragging — that version works by keyboard and on a tablet, which
 §11 assumes.
+
 
 ## The size grid
 

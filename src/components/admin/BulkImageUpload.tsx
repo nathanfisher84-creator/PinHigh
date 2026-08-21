@@ -67,11 +67,12 @@ export function BulkImageUpload() {
       >
         <p className="font-medium">Drop a folder of photos here, zipped</p>
         <p className="mt-1 text-sm text-graphite-ink max-w-lg mx-auto">
-          Name each photo after its article number —{" "}
-          <span className="tabular">41001_1.jpg</span>,{" "}
-          <span className="tabular">41001_2.jpg</span> — and they will land on the
-          right products. A single <span className="tabular">41001.jpg</span> works
-          too. Sub-folders are fine.
+          The photo pack adidas send you, exactly as it arrives. The first six
+          characters of each filename are the article number —{" "}
+          <span className="tabular">HZ6891_Standard View.jpeg</span> — so they
+          land on the right products by themselves. The ghost-mannequin
+          &ldquo;Standard View&rdquo; becomes the main image, and the CAD line
+          drawings are left out. Sub-folders are fine.
         </p>
         <label className="mt-4 inline-block">
           <span className="cursor-pointer bg-fairway px-4 py-2 text-sm text-paper hover:bg-ink transition-colors duration-150 inline-block">
@@ -143,8 +144,17 @@ export function BulkImageUpload() {
           <h3 className="text-lg">What will be added</h3>
           <p className="tabular mt-1">
             {preview.totalImages} photos across {preview.matched?.length ?? 0} articles
+            {preview.cadSkipped ? ` · ${preview.cadSkipped} CAD drawings skipped` : ""}
             {preview.unmatched?.length ? ` · ${preview.unmatched.length} not matched` : ""}
           </p>
+          {!!preview.cadSkipped && (
+            <p className="mt-1 text-sm text-graphite-ink">
+              adidas ship a flat line drawing beside each photograph — the
+              numbered ones like{" "}
+              <span className="tabular">Standard View-1</span>. Those are left
+              out; only the real product shots are uploaded.
+            </p>
+          )}
           <p className="mt-1 text-sm text-graphite-ink">
             From <strong>{preview.filename}</strong>
           </p>

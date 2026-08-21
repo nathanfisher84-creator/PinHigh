@@ -1,6 +1,6 @@
 import { registerHooks } from "node:module";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -22,7 +22,16 @@ function resolveFile(basePath) {
     path.join(basePath, "index.ts"),
     path.join(basePath, "index.tsx"),
   ];
-  return candidates.find((c) => existsSync(c) && !c.endsWith(path.sep));
+  // A bare directory is not a module: `@/lib/db` must resolve to its
+  // index.ts, which is what the bundler does.
+  return candidates.find((c) => {
+    if (!existsSync(c)) return false;
+    try {
+      return !statSync(c).isDirectory();
+    } catch {
+      return false;
+    }
+  });
 }
 
 registerHooks({

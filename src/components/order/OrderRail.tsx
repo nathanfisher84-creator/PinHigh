@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCartTotals } from "@/lib/cart/store";
-import { money, units } from "@/lib/format";
+import { PRICE_ON_REQUEST, units } from "@/lib/format";
 
 /**
  * The running total (spec §6.3).
@@ -46,9 +46,8 @@ export function OrderRail() {
               {totals.articles > 1 ? ` · ${totals.articles} styles` : ""}
             </span>
           </p>
-          <p className="tabular text-xs sm:text-sm text-graphite-ink truncate">
-            {money(totals.value)}{" "}
-            <span className="label-caps align-baseline">Indicative</span>
+          <p className="text-xs sm:text-sm text-graphite-ink truncate">
+            {PRICE_ON_REQUEST}
           </p>
         </div>
 

@@ -1,6 +1,9 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { matchImageFilenames } from "@/lib/images/match";
+import { matchImageFilenames, isCadDrawing, viewRank } from "@/lib/images/match";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { readZip } from "@/lib/zip";
 import { isMeaningfulEntry } from "@/lib/zip";
 import { defaultAltText } from "@/lib/images/process";
 
@@ -159,6 +162,86 @@ describe("adidas photo filenames", () => {
       ARTICLES,
     );
     assert.deepEqual(r.articlesCovered, ["HZ6891", "KS2292"]);
+  });
+});
+
+describe("the adidas photo pack", () => {
+  /*
+   * The real pack: 164 files for 23 articles, named
+   * `{ARTICLE}_{View}.jpeg`. Alongside each photograph adidas ship a CAD line
+   * drawing as a numbered variant of a view, which must not reach a product
+   * page — a flat technical illustration next to real photography reads as a
+   * mistake.
+   */
+  const PACK = path.join(import.meta.dirname, "fixtures", "adidas-images.zip");
+  const ARTICLES_IN_PACK = [
+    "HZ6891", "HZ6892", "HZ6893", "HZ6894", "IQ2935", "IS7344", "IS7345",
+    "IS7346", "IU4435", "IU4436", "IU4437", "IU4441", "IU4442", "IU4443",
+    "IU4444", "IU4485", "IU4486", "JP0473", "JY5470", "JY5471", "KC1118",
+    "KS2292", "KT2806",
+  ];
+
+  function matchPack() {
+    const entries = readZip(readFileSync(PACK));
+    return matchImageFilenames(
+      [...entries.keys()].map((p) => ({ path: p })),
+      ARTICLES_IN_PACK,
+    );
+  }
+
+  test("a numbered view is a CAD drawing", () => {
+    assert.equal(isCadDrawing("HZ6891_Standard View-1.jpeg"), true);
+    assert.equal(isCadDrawing("IS7344_Back View-1.jpeg"), true);
+    // The photographs are never numbered.
+    assert.equal(isCadDrawing("HZ6891_Standard View.jpeg"), false);
+    assert.equal(isCadDrawing("IU4485_F_Torso_B2CCat.jpeg"), false);
+  });
+
+  test("every CAD is left out and nothing else is", () => {
+    const r = matchPack();
+    assert.equal(r.skippedCad.length, 21);
+    assert.ok(
+      r.skippedCad.every((f) => /-\d+\.(jpe?g|png)$/i.test(f)),
+      "only numbered variants are skipped",
+    );
+    assert.equal(
+      r.matched.filter((m) => /-\d+\.(jpe?g|png)$/i.test(m.filename)).length,
+      0,
+      "no CAD reaches a product",
+    );
+  });
+
+  test("the whole pack resolves with nothing left over", () => {
+    const r = matchPack();
+    assert.equal(r.matched.length, 143);
+    assert.equal(r.unmatched.length, 0);
+    assert.equal(r.articlesCovered.length, 23);
+  });
+
+  test("the ghost-mannequin shot leads each product", () => {
+    // Standard View is the shot adidas uses as its own hero, so it takes the
+    // card and the top of the product page.
+    const r = matchPack();
+    const first = r.matched
+      .filter((m) => m.article_number === "HZ6891")
+      .sort((a, b) => a.sequence - b.sequence)[0];
+    assert.match(first.filename, /Standard View\.jpe?g$/i);
+  });
+
+  test("views fall in a sensible order behind it", () => {
+    assert.ok(viewRank("Standard View") < viewRank("Front View"));
+    assert.ok(viewRank("Front View") < viewRank("Back View"));
+    assert.ok(viewRank("Back View") < viewRank("Side View"));
+    // "Back Center View" also contains "back view" — the specific one wins.
+    assert.ok(viewRank("Back Center View") > viewRank("Back View"));
+  });
+
+  test("a numeric suffix still orders where someone uses that convention", () => {
+    const r = matchImageFilenames(
+      files("41001_2.jpg", "41001_1.jpg"),
+      ["41001"],
+    );
+    assert.deepEqual(r.matched.map((m) => m.sequence), [1, 2]);
   });
 });
 

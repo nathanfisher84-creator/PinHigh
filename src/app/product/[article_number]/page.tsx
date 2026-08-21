@@ -15,7 +15,7 @@ import {
   GENDER_LABELS,
   CONDITION_LABELS,
 } from "@/lib/domain/types";
-import { amount, money, PRICE_CAVEAT, stockAsAt } from "@/lib/format";
+import { PRICE_NOTE, PRICE_ON_REQUEST, stockAsAt } from "@/lib/format";
 
 type Params = Promise<{ article_number: string }>;
 
@@ -66,8 +66,8 @@ export default async function ProductPage({ params }: { params: Params }) {
     offers: {
       "@type": "AggregateOffer",
       priceCurrency: "AED",
-      lowPrice: product.price_wholesale ?? undefined,
-      highPrice: product.rrp ?? product.price_wholesale ?? undefined,
+      // No price is published: corporate pricing depends on quantity, branding
+      // and delivery, so there is no figure that would be true for every buyer.
       offerCount: product.variants.length,
       availability:
         totalUnits > 0
@@ -121,26 +121,9 @@ export default async function ProductPage({ params }: { params: Params }) {
       <div className="mt-10 grid gap-8 lg:grid-cols-2">
         <div>
           <div className="hairline bg-paper-raised px-4 py-4">
-            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
-              <p className="tabular text-xl">
-                <strong className="font-bold">{money(product.price_wholesale)}</strong>
-                <span className="text-graphite-ink text-sm"> per unit</span>
-              </p>
-              {product.rrp !== null && (
-                <p className="tabular text-sm text-graphite-ink">
-                  RRP {amount(product.rrp)}
-                  {product.price_wholesale !== null && product.rrp > 0 && (
-                    <span>
-                      {" "}
-                      · {Math.round((1 - product.price_wholesale / product.rrp) * 100)}% below
-                      retail
-                    </span>
-                  )}
-                </p>
-              )}
-            </div>
-            <p className="mt-1 text-xs text-graphite-ink">{PRICE_CAVEAT}</p>
-            <p className="mt-2 tabular text-xs text-graphite-ink">{stockAsAt(stockDate)}</p>
+            <p className="text-lg font-medium">{PRICE_ON_REQUEST}</p>
+            <p className="mt-1 text-sm text-graphite-ink">{PRICE_NOTE}</p>
+            <p className="mt-3 tabular text-xs text-graphite-ink">{stockAsAt(stockDate)}</p>
           </div>
 
           {totalUnits === 0 && (

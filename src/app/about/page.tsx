@@ -44,8 +44,10 @@ export default function AboutPage() {
             unpicking a transaction afterwards.
           </p>
           <p>
-            Prices shown are indicative and exclude 5% UAE VAT. Your tax invoice
-            is raised by our team when the order is confirmed.
+            We do not publish prices. What a corporate order costs depends on the
+            quantity, the branding and the delivery, so we price each request on
+            its own rather than putting a figure on a page that would be wrong for
+            most people who read it. Quotes are in AED and exclude 5% UAE VAT.
           </p>
         </div>
       </section>
