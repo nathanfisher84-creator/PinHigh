@@ -157,6 +157,35 @@ async function waitForSeeder(): Promise<void> {
   console.error("[pinhigh] gave up waiting for another process to finish seeding");
 }
 
+/**
+ * A claim whose holder died mid-seed would block seeding forever: the row is
+ * permanent, `seeded_at` never arrives, and every later process waits out its
+ * deadline against an empty catalogue. (This happened: a build was killed
+ * seconds after claiming, and the next three deploys came up with 0 articles.)
+ * A claim that is old and demonstrably went nowhere is taken over — the
+ * UPDATE is guarded on the old timestamp, so two processes cannot both win.
+ */
+async function takeOverStaleClaim(): Promise<boolean> {
+  if (await get("SELECT 1 FROM settings WHERE key = 'seeded_at'")) return false;
+
+  const row = await get<{ updated_at: string }>(
+    "SELECT updated_at FROM settings WHERE key = 'seed_claim'",
+  );
+  if (!row) return false;
+  if (Date.now() - Date.parse(row.updated_at) < 10 * 60_000) return false;
+
+  const steal = await run(
+    "UPDATE settings SET value = ?, updated_at = ? WHERE key = 'seed_claim' AND updated_at = ?",
+    String(process.pid),
+    now(),
+    row.updated_at,
+  );
+  if (Number(steal.changes ?? 0) === 0) return false;
+
+  console.warn("[pinhigh] took over a stale seed claim from a process that died mid-seed");
+  return true;
+}
+
 async function seedCatalogue(): Promise<boolean> {
   const existing = await get<{ n: number }>("SELECT COUNT(*) AS n FROM products");
   if ((existing?.n ?? 0) > 0) return false;
@@ -174,7 +203,7 @@ async function seedCatalogue(): Promise<boolean> {
     String(process.pid),
     now(),
   );
-  if (Number(claim.changes ?? 0) === 0) {
+  if (Number(claim.changes ?? 0) === 0 && !(await takeOverStaleClaim())) {
     await waitForSeeder();
     return false;
   }
