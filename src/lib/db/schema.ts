@@ -199,6 +199,29 @@ CREATE TABLE IF NOT EXISTS stock_alerts (
   UNIQUE (article_number, email)
 );
 
+-- Every manual change to a quantity, with the reason.
+--
+-- The adidas files only record what came *in*: an invoice is a delivery note
+-- and nothing decrements as stock is sold. Without a ledger the figures drift
+-- upward from reality and nobody can say why, which over-states availability --
+-- the one error that costs a sale twice. This is the record that lets the
+-- owner reconcile.
+CREATE TABLE IF NOT EXISTS stock_adjustments (
+  id              TEXT PRIMARY KEY,
+  sku             TEXT NOT NULL,
+  article_number  TEXT NOT NULL,
+  size            TEXT NOT NULL,
+  quantity_before INTEGER NOT NULL,
+  quantity_after  INTEGER NOT NULL,
+  delta           INTEGER NOT NULL,
+  reason          TEXT NOT NULL,
+  note            TEXT,
+  actor           TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_adjustments_sku ON stock_adjustments(sku);
+CREATE INDEX IF NOT EXISTS idx_adjustments_created ON stock_adjustments(created_at);
+
 -- Audit log of admin actions (§11 security).
 CREATE TABLE IF NOT EXISTS audit_log (
   id         TEXT PRIMARY KEY,

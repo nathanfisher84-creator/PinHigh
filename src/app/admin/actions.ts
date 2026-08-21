@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import {
   clearSession,
+  getSession,
   setSession,
   verifyCredentials,
   adminConfigured,
@@ -19,6 +20,7 @@ import {
 import { resendQuoteNotifications } from "@/lib/notify";
 import { sendWhatsAppTest } from "@/lib/notify/whatsapp";
 import { rollbackImport } from "@/lib/import/commit";
+import { adjustStock } from "@/lib/repo/stock";
 import type { QuoteStatus } from "@/lib/domain/types";
 
 /* -------------------------------------------------------------------------
@@ -297,4 +299,81 @@ export async function saveSettings(formData: FormData) {
 
 export async function getAnnouncement(): Promise<string> {
   return getSetting("announcement");
+}
+
+/* -------------------------------------------------------------------------
+   Manual stock adjustment
+   ---------------------------------------------------------------------- */
+
+/**
+ * Correct quantities by hand.
+ *
+ * Needed because neither adidas file decrements stock as it is sold — they
+ * record deliveries in, never sales out — so without this the site slowly
+ * over-states what is on the shelf.
+ */
+export async function saveStockAdjustment(
+  changes: { variantId: string; quantity: number }[],
+  reason: string,
+  note: string,
+): Promise<{ ok: boolean; message: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Not signed in." };
+
+  if (changes.length === 0) {
+    return { ok: false, message: "Nothing to save." };
+  }
+
+  const result = adjustStock(changes, reason, note.trim() || null, session.email);
+
+  revalidatePath("/admin/stock");
+  revalidatePath("/admin");
+  revalidatePath("/catalogue");
+  revalidatePath("/");
+
+  if (result.errors.length > 0 && result.changed === 0) {
+    return { ok: false, message: result.errors[0] };
+  }
+  if (result.changed === 0) {
+    return { ok: false, message: "Those figures were already correct — nothing changed." };
+  }
+
+  return {
+    ok: true,
+    message: `${result.changed} ${result.changed === 1 ? "size" : "sizes"} updated.`,
+  };
+}
+
+/** Set the corporate price across several articles at once. */
+export async function setCorporatePrices(
+  ids: string[],
+  price: number | null,
+): Promise<{ ok: boolean; message: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Not signed in." };
+  if (ids.length === 0) return { ok: false, message: "Nothing selected." };
+
+  if (price !== null && (!Number.isFinite(price) || price < 0)) {
+    return { ok: false, message: "That price isn't a number." };
+  }
+
+  run(
+    `UPDATE products SET price_wholesale = ?, updated_at = ?
+      WHERE id IN (${ids.map(() => "?").join(",")})`,
+    price,
+    now(),
+    ...ids,
+  );
+
+  audit("product.price.bulk", undefined, { ids: ids.length, price }, session.email);
+  revalidatePath("/admin/products");
+  revalidatePath("/catalogue");
+
+  return {
+    ok: true,
+    message:
+      price === null
+        ? `Price cleared on ${ids.length} ${ids.length === 1 ? "article" : "articles"}.`
+        : `${ids.length} ${ids.length === 1 ? "article" : "articles"} set to AED ${price}.`,
+  };
 }
