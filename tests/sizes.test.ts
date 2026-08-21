@@ -7,6 +7,8 @@ import {
   normaliseSize,
   stockLevel,
   stockBarHeight,
+  sizeKey,
+  isStandardAlphaSubset,
 } from "@/lib/domain/sizes";
 
 /**
@@ -114,5 +116,26 @@ describe("stock level", () => {
     assert.ok(stockBarHeight(4, 90) >= 8);
     assert.equal(stockBarHeight(0, 90), 0);
     assert.equal(stockBarHeight(90, 90), 100);
+  });
+});
+
+describe("standard run completion (the small-invoice problem)", () => {
+  test("2XL and XXL are the same rung", () => {
+    assert.equal(sizeKey("2XL"), sizeKey("XXL"));
+    assert.notEqual(sizeKey("2XL"), sizeKey("3XL"));
+  });
+
+  test("plain alpha subsets qualify for completion", () => {
+    assert.equal(isStandardAlphaSubset(["M", "L"]), true);
+    assert.equal(isStandardAlphaSubset(["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"]), true);
+    assert.equal(isStandardAlphaSubset(["XXL"]), true, "alias spelling still qualifies");
+  });
+
+  test("articles on their own ladder are left alone", () => {
+    assert.equal(isStandardAlphaSubset(["SM", "LXL"]), false, "cap sizing is not the apparel run");
+    assert.equal(isStandardAlphaSubset(["30", "32", "34"]), false, "numeric waists");
+    assert.equal(isStandardAlphaSubset(["One Size"]), false);
+    assert.equal(isStandardAlphaSubset(["M", "8.5"]), false, "mixed runs are nobody's ladder");
+    assert.equal(isStandardAlphaSubset([]), false, "no sizes is no evidence");
   });
 });

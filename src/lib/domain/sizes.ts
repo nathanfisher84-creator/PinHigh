@@ -130,6 +130,32 @@ export function bySizeOrder<T extends { size_order?: number; size: string }>(
 }
 
 /**
+ * The default apparel run, in the spelling the adidas files use. When an
+ * article arrives on a small invoice carrying only the sizes that shipped,
+ * the catalogue completes it to this run at zero stock — a buyer should see
+ * the whole ladder with sold-out sizes marked, not a mysteriously short one,
+ * and the owner must be able to correct any size the moment goods arrive.
+ */
+export const STANDARD_ALPHA_RUN = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"] as const;
+
+/** Canonical identity for a size: "2XL" and "XXL" are the same rung. */
+export function sizeKey(raw: string): string {
+  const s = normaliseSize(raw);
+  return ALPHA_ALIASES[s] ?? s;
+}
+
+const STANDARD_KEYS = new Set(STANDARD_ALPHA_RUN.map((s) => sizeKey(s)));
+
+/**
+ * True when every existing size sits on the plain XS–4XL ladder. Only then is
+ * completing to the standard run safe: a cap sized SM/LXL or a numeric-waist
+ * trouser has its own run, and padding it with XS–4XL would be invention.
+ */
+export function isStandardAlphaSubset(sizes: string[]): boolean {
+  return sizes.length > 0 && sizes.every((s) => STANDARD_KEYS.has(sizeKey(s)));
+}
+
+/**
  * Derive the SKU (spec §4.1) — never expect one in the file.
  * `{article_number}-{size slug}`, uppercased, non-alphanumerics to hyphens.
  */

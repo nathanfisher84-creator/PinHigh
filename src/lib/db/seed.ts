@@ -5,6 +5,7 @@ import { all, get, now, run, setSetting, uid } from "./core";
 import { readWorkbook, pickStockSheet } from "@/lib/xlsx/read";
 import { parseStockSheet } from "@/lib/import/parse";
 import { buildDiff, commitImport } from "@/lib/import/commit";
+import { completeSizeRuns } from "@/lib/import/complete-runs";
 import { CATEGORIES } from "@/lib/domain/types";
 import { defaultAltText } from "@/lib/images/process";
 
@@ -345,6 +346,10 @@ export async function ensureSeeded(): Promise<void> {
     const seeded = await seedCatalogue();
 
     if (seeded) await seedImages();
+
+    // Backfill for databases seeded before run completion existed, and for
+    // articles that first arrived on a partial invoice. Idempotent and cheap.
+    await completeSizeRuns();
 
     if (seeded && !await get("SELECT 1 FROM settings WHERE key = 'seeded_at'")) {
       await setSetting("seeded_at", now());

@@ -1,5 +1,6 @@
 import "server-only";
 import { all, audit, get, now, run, setSetting, transaction, uid } from "@/lib/db/core";
+import { completeSizeRuns } from "./complete-runs";
 import type { ParsedRow, RowIssue } from "./parse";
 
 /**
@@ -503,6 +504,11 @@ export async function commitImport(
     rowsUpdated,
     rowsZeroed,
   });
+
+  // A small invoice only carries the sizes that shipped. Complete any plain
+  // XS–4XL article to the full run at zero, so the site never shows a
+  // mysteriously short ladder and the owner can adjust every size.
+  await completeSizeRuns();
 
   return { importId, rowsCreated, rowsUpdated, rowsZeroed };
 }
