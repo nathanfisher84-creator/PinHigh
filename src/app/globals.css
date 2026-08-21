@@ -14,42 +14,47 @@
    ========================================================================= */
 
 @theme {
-  /* -- Palette. Values from spec §10, which is the agreed direction. ------- */
-  --color-paper: #f7f6f3; /* page ground, a cool chalk, not cream */
-  --color-ink: #14181a; /* near-black, all body text */
-  --color-graphite: #6b7276; /* rules, dividers, large labels */
-  --color-fairway: #1f4d3a; /* brand mark, primary actions, in stock */
-  --color-flag: #c9483a; /* low stock and destructive actions only */
-  --color-sand: #d8d2c4; /* dividers, table zebra, disabled states */
+  /* -- Palette. Rebuilt from the actual Pin High artwork: navy #1B2A47,
+     green #5CB947, red #D93A2B. Navy is the corporate voice — text, grounds,
+     structure. Green is the action and the good news: buttons, links, stock.
+     Red stays what it always was: low stock and destructive actions only. -- */
+  --color-paper: #fafaf8; /* clean near-white ground, cool not cream */
+  --color-ink: #16233b; /* brand navy-black, all body text */
+  --color-graphite: #5d6675; /* rules, dividers, large labels — navy-cast */
+  --color-fairway: #2f7d22; /* primary actions, in stock — the logo green,
+                               deepened one step so white text passes AA */
+  --color-flag: #d93a2b; /* the flag red from the mark */
+  --color-sand: #dfe1dc; /* dividers, table zebra, disabled states */
 
-  /* Darker text partners for the two tokens that sit close to, or below, the
-     WCAG AA floor of 4.5:1. The §10 values above are untouched and still used
-     for rules, fills and large type; these carry small body text.
-       graphite on paper = 4.53:1  (passes, but with no margin at 11–12px)
-         -> graphite-ink = 5.83:1
-       flag     on paper = 4.35:1  (fails AA for normal text)
-         -> flag-ink     = 5.57:1
-     Measured against #F7F6F3. White on fairway is 8.91:1, so primary buttons
-     are comfortable. */
-  --color-graphite-ink: #5a6165;
-  --color-flag-ink: #b03a2e;
+  /* Darker text partners for tokens that sit near the WCAG AA floor of 4.5:1.
+     The values above carry rules, fills and large type; these carry small
+     body text. Measured against #FAFAF8:
+       graphite-ink #4c5566 = 6.6:1     fairway #2f7d22 = 5.1:1
+       flag-ink #b52e20     = 5.5:1     white on fairway = 4.6:1
+       white on fairway-deep (navy) = 13.9:1 */
+  --color-graphite-ink: #4c5566;
+  --color-flag-ink: #b52e20;
 
   /* Tints, derived. Used for surfaces and state washes, never decoration. */
-  --color-paper-raised: #fffefb;
-  --color-paper-sunken: #efedE7;
-  --color-sand-soft: #e8e3d8;
-  --color-fairway-wash: #edf2ef;
-  --color-flag-wash: #fbeeec;
+  --color-paper-raised: #ffffff;
+  --color-paper-sunken: #f1f2ef;
+  --color-sand-soft: #e9eae5;
+  --color-fairway-wash: #edf6ea;
+  --color-flag-wash: #fcefed;
 
-  /* Fairway used as a *ground* rather than an accent. The deep end of the
-     brand colour, for full-bleed sections. */
-  --color-fairway-deep: #16382a;
-  --color-fairway-line: #2f5d4a;
-  --color-on-fairway: #eef2ef;
-  --color-on-fairway-dim: #9db3a8;
+  /* The brand navy as a *ground* — full-bleed hero and footer sections.
+     This is the corporate register the whole identity hangs on. */
+  --color-fairway-deep: #1b2a47;
+  --color-fairway-line: #2e4166;
+  --color-on-fairway: #f5f7fa;
+  --color-on-fairway-dim: #9fadc6;
+  /* The logo green at full brightness — only on navy grounds, where it has
+     the contrast to carry accents the deepened green carries on paper. */
+  --color-fairway-bright: #5cb947;
 
-  /* -- Type ---------------------------------------------------------------- */
-  --font-display: "Switzer", "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* -- Type. Archivo carries the display voice — the same heavy geometric
+     register as the logotype — over an Inter body and tabular mono. -------- */
+  --font-display: "Archivo", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Consolas",
     monospace;
@@ -144,7 +149,7 @@
   h3,
   h4 {
     font-family: var(--font-display);
-    font-weight: 500;
+    font-weight: 700;
     letter-spacing: -0.02em;
     text-wrap: balance;
   }
@@ -256,7 +261,7 @@
 /* Display type. Tight tracking and optical alignment at large sizes. */
 @utility display {
   font-family: var(--font-display);
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: -0.035em;
   line-height: 0.94;
   text-wrap: balance;

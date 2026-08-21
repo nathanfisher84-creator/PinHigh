@@ -66,7 +66,7 @@ export default async function HomePage() {
               <div className="flex flex-wrap gap-3 lg:justify-end">
                 <Link
                   href="/catalogue"
-                  className="bg-paper px-7 py-4 text-ink font-medium hover:bg-on-fairway-dim transition-colors duration-150"
+                  className="bg-fairway-bright px-7 py-4 text-fairway-deep font-semibold hover:bg-on-fairway transition-colors duration-150"
                 >
                   Browse the catalogue
                 </Link>
@@ -232,7 +232,7 @@ function Figure({
       <dt className="label-caps text-on-fairway-dim order-2">{label}</dt>
       <dd
         className={[
-          "figure-xl mt-3",
+          "figure-xl mt-3 text-fairway-bright",
           small ? "text-2xl sm:text-3xl" : "text-4xl sm:text-5xl",
         ].join(" ")}
       >

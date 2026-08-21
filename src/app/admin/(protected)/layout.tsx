@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession, adminConfigured } from "@/lib/auth";
-import { Wordmark } from "@/components/shell/Wordmark";
+import { Logo } from "@/components/shell/Logo";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { logout } from "@/app/admin/actions";
 
@@ -33,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <div className="flex h-14 items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <Link href="/admin" aria-label="Admin home">
-                <Wordmark className="h-6 w-auto text-fairway" />
+                <Logo />
               </Link>
               <span className="label-caps hidden sm:inline">Admin</span>
             </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Wordmark } from "./Wordmark";
+import { Logo } from "./Logo";
 import { stockAsAt } from "@/lib/format";
 import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
 import type { Facet } from "@/lib/repo/catalogue";
@@ -10,11 +10,15 @@ import type { Facet } from "@/lib/repo/catalogue";
 export function SiteFooter({
   stockDate,
   categories,
+  contactEmail,
+  contactPhone,
 }: {
   stockDate: string | null;
   /** Only categories that hold stock — a footer link to an empty
    *  category is a dead end, and the list was hardcoded before. */
   categories: Facet[];
+  contactEmail?: string;
+  contactPhone?: string;
 }) {
   const pathname = usePathname();
 
@@ -26,7 +30,7 @@ export function SiteFooter({
       <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 pt-16 lg:pt-20">
         <div className="grid gap-12 lg:grid-cols-[1fr_auto] lg:gap-24">
           <div>
-            <Wordmark className="h-8 w-auto text-on-fairway" />
+            <Logo tone="dark" />
             {/* §14.6: the old "best value golf gear" line was a discount promise.
                 This says who the site serves instead. */}
             <p className="mt-6 measure text-lg text-on-fairway-dim">
@@ -93,6 +97,30 @@ export function SiteFooter({
               <p className="tabular mt-4 text-xs text-on-fairway-dim">
                 {stockAsAt(stockDate)}
               </p>
+
+              {/* A B2B buyer deciding whether to trust the company looks for a
+                  person to reach before anything else. */}
+              {(contactEmail || contactPhone) && (
+                <div className="mt-6">
+                  <h2 className="label-caps text-on-fairway-dim mb-2">Talk to us</h2>
+                  {contactEmail && (
+                    <a
+                      href={`mailto:${contactEmail}`}
+                      className="block text-sm link-underline hover:link-underline-on"
+                    >
+                      {contactEmail}
+                    </a>
+                  )}
+                  {contactPhone && (
+                    <a
+                      href={`tel:${contactPhone.replace(/[^+d]/g, "")}`}
+                      className="tabular mt-1 block text-sm link-underline hover:link-underline-on"
+                    >
+                      {contactPhone}
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

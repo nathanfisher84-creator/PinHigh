@@ -39,6 +39,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // bar do not each open their own query on every navigation.
   const facets = await getFacets();
   const announcement = await getSetting("announcement");
+  const contactEmail = await getSetting("contact_email");
+  const contactPhone = await getSetting("contact_phone");
   const stockDate = await getStockAsAt();
 
   return (
@@ -56,7 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap"
         />
       </head>
       <body className="min-h-dvh flex flex-col">
@@ -81,7 +83,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {children}
         </main>
 
-        <SiteFooter stockDate={stockDate} categories={facets.categories} />
+        <SiteFooter
+          stockDate={stockDate}
+          categories={facets.categories}
+          contactEmail={contactEmail}
+          contactPhone={contactPhone}
+        />
 
         {/* The running total. Persistent rail on desktop, bottom bar on mobile
             (§6.3). Rendered once at the root so it survives navigation between

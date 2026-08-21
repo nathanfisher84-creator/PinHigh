@@ -12,7 +12,7 @@ import {
 } from "@/lib/domain/types";
 import { stockAsAt } from "@/lib/format";
 import { useCartTotals } from "@/lib/cart/store";
-import { Wordmark } from "./Wordmark";
+import { Logo } from "./Logo";
 import { CatalogueMenu } from "./CatalogueMenu";
 
 /**
@@ -67,7 +67,7 @@ export function SiteHeader({ categories, genders, stockDate, announcement }: Pro
         <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12">
           <div className="flex h-20 items-center justify-between gap-8 border-b border-sand">
             <Link href="/" aria-label="Pin High UAE, home" className="shrink-0">
-              <Wordmark className="h-7 w-auto text-ink" />
+              <Logo />
             </Link>
 
             <nav
