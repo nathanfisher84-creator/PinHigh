@@ -1,6 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
+import { createHmac, timingSafeEqual, randomBytes, scryptSync } from "node:crypto";
 
 /**
  * Admin authentication (spec §9, §11).
@@ -76,15 +76,47 @@ export function readSessionToken(token: string | undefined): Session | null {
  * Credential check. Deliberately the only place a password is compared, so
  * swapping to Supabase Auth touches one function.
  */
-export function verifyCredentials(email: string, password: string): Session | null {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  if (!adminEmail || !adminPassword) return null;
-  if (email.trim().toLowerCase() !== adminEmail.trim().toLowerCase()) return null;
+/**
+ * Two password sources, owner-set first: a password changed in the admin
+ * panel (a scrypt hash in settings — the env password stops working the
+ * moment one exists, which is the point of changing it), falling back to
+ * the ADMIN_PASSWORD the deployment started with.
+ */
+export async function verifyPassword(password: string): Promise<boolean> {
+  const { getSetting } = await import("@/lib/db");
+  const stored = await getSetting("admin_password_hash");
 
+  if (stored) {
+    const [saltHex, hashHex] = stored.split(":");
+    if (!saltHex || !hashHex) return false;
+    const derived = scryptSync(password, Buffer.from(saltHex, "hex"), 32);
+    const expected = Buffer.from(hashHex, "hex");
+    return derived.length === expected.length && timingSafeEqual(derived, expected);
+  }
+
+  const envPassword = process.env.ADMIN_PASSWORD;
+  if (!envPassword) return false;
   const a = Buffer.from(password);
-  const b = Buffer.from(adminPassword);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  const b = Buffer.from(envPassword);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Store an owner-chosen password. From here on, only it signs in. */
+export async function setAdminPassword(password: string): Promise<void> {
+  const { setSetting } = await import("@/lib/db");
+  const salt = randomBytes(16);
+  const hash = scryptSync(password, salt, 32);
+  await setSetting("admin_password_hash", `${salt.toString("hex")}:${hash.toString("hex")}`);
+}
+
+export async function verifyCredentials(
+  email: string,
+  password: string,
+): Promise<Session | null> {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) return null;
+  if (email.trim().toLowerCase() !== adminEmail.trim().toLowerCase()) return null;
+  if (!(await verifyPassword(password))) return null;
 
   return {
     email: adminEmail,

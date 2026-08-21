@@ -63,7 +63,7 @@ export async function login(
     };
   }
 
-  const session = verifyCredentials(email, password);
+  const session = await verifyCredentials(email, password);
   if (!session) {
     await audit("admin.login.failed", email);
     // One message for both cases — telling an attacker which half was wrong is
@@ -399,5 +399,125 @@ export async function setCorporatePrices(
       price === null
         ? `Price cleared on ${ids.length} ${ids.length === 1 ? "article" : "articles"}.`
         : `${ids.length} ${ids.length === 1 ? "article" : "articles"} set to AED ${price}.`,
+  };
+}
+
+/* -------------------------------------------------------------------------
+   Owner-managed email sending and admin password
+   ---------------------------------------------------------------------- */
+
+/**
+ * The client enters their own Gmail here so nobody else ever handles the
+ * credentials. The app password is sealed (AES-GCM under the deployment
+ * secret) before it is stored; it is never echoed back to any page.
+ */
+export async function saveGmailSettings(
+  formData: FormData,
+): Promise<{ ok: boolean; message: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Not signed in." };
+
+  const { canStoreSecrets, sealSecret } = await import("@/lib/secrets");
+  if (!canStoreSecrets()) {
+    return {
+      ok: false,
+      message:
+        "The deployment is missing ADMIN_SESSION_SECRET, so secrets cannot be stored safely yet.",
+    };
+  }
+
+  const user = String(formData.get("gmail_user") ?? "").trim();
+  // Google displays app passwords in groups of four; tolerate the spaces.
+  const password = String(formData.get("gmail_app_password") ?? "").replace(/\s+/g, "");
+
+  if (!/^[^@\s]+@gmail\.com$/i.test(user) && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(user)) {
+    return { ok: false, message: "That doesn't look like an email address." };
+  }
+  if (password.length < 16) {
+    return {
+      ok: false,
+      message:
+        "App passwords are 16 characters. Google Account → Security → 2-Step Verification → App passwords.",
+    };
+  }
+
+  await setSetting("gmail_user", user);
+  await setSetting("gmail_app_password", sealSecret(password));
+  await audit("settings.email", "gmail", { user }, session.email);
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/recipients");
+  return { ok: true, message: `Sending as ${user}. Send yourself a test to be sure.` };
+}
+
+export async function clearGmailSettings(): Promise<{ ok: boolean; message: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Not signed in." };
+
+  await setSetting("gmail_user", "");
+  await setSetting("gmail_app_password", "");
+  await audit("settings.email", "gmail-cleared", undefined, session.email);
+
+  revalidatePath("/admin/settings");
+  return { ok: true, message: "Gmail sending removed." };
+}
+
+export async function sendTestEmailAction(
+  formData: FormData,
+): Promise<{ ok: boolean; message: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Not signed in." };
+
+  const to = String(formData.get("to") ?? "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    return { ok: false, message: "Enter the address the test should go to." };
+  }
+
+  try {
+    const { sendTestEmail } = await import("@/lib/notify/email");
+    await sendTestEmail(to);
+    return { ok: true, message: `Test sent to ${to} — check the inbox (and spam, once).` };
+  } catch (err) {
+    return {
+      ok: false,
+      message:
+        err instanceof Error && /not configured/i.test(err.message)
+          ? "No email transport is set up yet — save the Gmail details first."
+          : "Sending failed. Double-check the address and the app password.",
+    };
+  }
+}
+
+/**
+ * Change the admin password from the panel. Once set, the password the
+ * deployment started with stops working — which is the point.
+ */
+export async function changeAdminPassword(
+  formData: FormData,
+): Promise<{ ok: boolean; message: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Not signed in." };
+
+  const current = String(formData.get("current") ?? "");
+  const next = String(formData.get("next") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+
+  const { verifyPassword, setAdminPassword } = await import("@/lib/auth");
+  if (!(await verifyPassword(current))) {
+    return { ok: false, message: "The current password isn't right." };
+  }
+  if (next.length < 12) {
+    return { ok: false, message: "Use at least 12 characters." };
+  }
+  if (next !== confirm) {
+    return { ok: false, message: "The two copies of the new password don't match." };
+  }
+
+  await setAdminPassword(next);
+  await audit("settings.password", undefined, undefined, session.email);
+
+  return {
+    ok: true,
+    message: "Password changed. Existing sign-ins stay valid until they expire.",
   };
 }

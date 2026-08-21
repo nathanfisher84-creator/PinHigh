@@ -67,7 +67,7 @@ export async function dispatchQuoteNotifications(
   const emailLog: NotificationLog = [];
   const whatsappLog: NotificationLog = [];
 
-  const canEmail = emailConfigured();
+  const canEmail = await emailConfigured();
   const whatsappConfigured = Boolean(
     process.env.WHATSAPP_ACCESS_TOKEN &&
       process.env.WHATSAPP_PHONE_NUMBER_ID &&

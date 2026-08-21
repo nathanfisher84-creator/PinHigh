@@ -1,16 +1,30 @@
-import { getSettings } from "@/lib/db";
+import { getSetting, getSettings } from "@/lib/db";
 import { saveSettings } from "@/app/admin/actions";
 import { SubmitButton } from "@/components/admin/SubmitButton";
+import { GmailSettings, PasswordSettings } from "@/components/admin/OwnerSettings";
+import { emailTransportStatus } from "@/lib/notify/email";
+import { canStoreSecrets } from "@/lib/secrets";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Settings" };
 
 export default async function AdminSettingsPage() {
   const settings = await getSettings();
+  const email = await emailTransportStatus();
+  const hasOwnPassword = Boolean(await getSetting("admin_password_hash"));
 
   return (
     <div className="max-w-2xl">
       <h1 className="text-2xl">Settings</h1>
+
+      <div className="mt-8 space-y-8">
+        <GmailSettings
+          transport={email.transport}
+          sender={email.sender}
+          canStore={canStoreSecrets()}
+        />
+        <PasswordSettings hasOwnPassword={hasOwnPassword} />
+      </div>
 
       <form action={saveSettings} className="mt-8 space-y-8">
         <section className="hairline bg-paper-raised px-4 py-4">

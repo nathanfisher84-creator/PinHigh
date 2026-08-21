@@ -3,6 +3,8 @@ import type { QuoteRequestWithLines } from "@/lib/domain/types";
 import { formatDate, money, units } from "@/lib/format";
 import { quoteLinesCsv } from "./csv";
 import type { Recipient } from "./index";
+import { getSetting } from "@/lib/db";
+import { openSecret } from "@/lib/secrets";
 
 /**
  * Transactional email via Resend (spec §2, §7.3).
@@ -28,11 +30,45 @@ const RESEND_ENDPOINT = "https://api.resend.com/emails";
  *
  * Swapping is an env-var change; nothing above this file knows or cares.
  */
-export function emailConfigured(): boolean {
-  return Boolean(
-    (process.env.RESEND_API_KEY && process.env.ORDER_FROM_EMAIL) ||
-      (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
-  );
+/**
+ * Gmail credentials, owner-set first: the pair entered on the admin settings
+ * page (app password sealed at rest) beats the environment pair, because the
+ * account belongs to the client and the panel is where they manage it.
+ */
+async function gmailCreds(): Promise<{ user: string; pass: string } | null> {
+  const dbUser = await getSetting("gmail_user");
+  if (dbUser) {
+    const sealed = await getSetting("gmail_app_password");
+    const pass = sealed ? openSecret(sealed) : null;
+    if (pass) return { user: dbUser, pass };
+  }
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    return { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD };
+  }
+  return null;
+}
+
+export async function emailConfigured(): Promise<boolean> {
+  if (process.env.RESEND_API_KEY && process.env.ORDER_FROM_EMAIL) return true;
+  return (await gmailCreds()) !== null;
+}
+
+/** What the settings page reports, without ever surfacing a secret. */
+export async function emailTransportStatus(): Promise<
+  { transport: "resend" | "gmail-admin" | "gmail-env" | "none"; sender: string | null }
+> {
+  if (process.env.RESEND_API_KEY && process.env.ORDER_FROM_EMAIL) {
+    return { transport: "resend", sender: process.env.ORDER_FROM_EMAIL };
+  }
+  const dbUser = await getSetting("gmail_user");
+  if (dbUser) {
+    const sealed = await getSetting("gmail_app_password");
+    if (sealed && openSecret(sealed)) return { transport: "gmail-admin", sender: dbUser };
+  }
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    return { transport: "gmail-env", sender: process.env.GMAIL_USER };
+  }
+  return { transport: "none", sender: null };
 }
 
 interface OutboundEmail {
@@ -73,18 +109,17 @@ async function deliver(msg: OutboundEmail): Promise<void> {
     return;
   }
 
-  const gmailUser = process.env.GMAIL_USER;
-  const gmailPassword = process.env.GMAIL_APP_PASSWORD;
-  if (gmailUser && gmailPassword) {
+  const gmail = await gmailCreds();
+  if (gmail) {
     const { default: nodemailer } = await import("nodemailer");
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 465,
       secure: true,
-      auth: { user: gmailUser, pass: gmailPassword },
+      auth: { user: gmail.user, pass: gmail.pass },
     });
     await transporter.sendMail({
-      from: { name: "Pin High UAE", address: gmailUser },
+      from: { name: "Pin High UAE", address: gmail.user },
       to: msg.to,
       replyTo: msg.replyTo,
       subject: msg.subject,
@@ -95,6 +130,17 @@ async function deliver(msg: OutboundEmail): Promise<void> {
   }
 
   throw new Error("Email is not configured.");
+}
+
+/** A minimal proof-of-life email, for the settings page's test button. */
+export async function sendTestEmail(to: string): Promise<void> {
+  await deliver({
+    to,
+    subject: "Pin High — test email",
+    html:
+      "<p>This is a test from your Pin High site. If you are reading it, " +
+      "quote notifications will reach this address.</p>",
+  });
 }
 
 export async function sendQuoteEmail(
