@@ -28,7 +28,7 @@ export default async function AdminQuotesPage({
   const from = typeof params.from === "string" ? params.from : undefined;
   const to = typeof params.to === "string" ? params.to : undefined;
 
-  const quotes = listQuotes({
+  const quotes = await listQuotes({
     status: statuses.length ? statuses : undefined,
     branded,
     search,

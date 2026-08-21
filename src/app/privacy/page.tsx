@@ -20,8 +20,8 @@ export const metadata: Metadata = {
  * if the client sells into the EU, GDPR applies to those buyers and the
  * stricter standard should simply be adopted throughout.
  */
-export default function PrivacyPage() {
-  const settings = getSettings();
+export default async function PrivacyPage() {
+  const settings = await getSettings();
   const email = settings.contact_email || "sales@pinhighuae.com";
 
   return (

@@ -1,11 +1,11 @@
 /**
  * Schema (spec §3).
  *
- * Written for SQLite so the application runs end to end without a provisioned
- * Supabase project. `supabase/migrations/0001_init.sql` carries the same shape
- * in Postgres with the RLS policies §11 requires; `src/lib/db/index.ts` is the
- * single seam to swap over. Column names, types and constraints are kept
- * identical on both sides so nothing above the repository layer has to change.
+ * Plain portable Postgres DDL. In production it runs against Supabase via
+ * DATABASE_URL; without credentials it runs unchanged against the embedded
+ * PGlite fallback (see `core.ts`), so the application still works end to end
+ * with zero setup. Timestamps are ISO-8601 TEXT set by the application —
+ * one clock, one format, and rows survive a database move byte-for-byte.
  *
  * Two rules the schema itself enforces, because they are the ones that would
  * quietly destroy value if left to application code:
@@ -16,9 +16,6 @@
  */
 
 export const SCHEMA_SQL = `
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS products (
   id                TEXT PRIMARY KEY,
   article_number    TEXT NOT NULL UNIQUE,

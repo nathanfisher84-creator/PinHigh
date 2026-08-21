@@ -2,8 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // node:sqlite is a Node builtin; keep it out of the bundler's dependency graph.
-  serverExternalPackages: ["node:sqlite"],
+  // Native/wasm-backed packages stay out of the bundler's dependency graph:
+  // pg (net sockets), PGlite (wasm assets on disk), sharp (native binaries).
+  serverExternalPackages: ["pg", "@electric-sql/pglite", "sharp"],
 
   /*
    * The catalogue seeds itself from the stock template on first run. That file
@@ -31,6 +32,10 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/webp"],
     deviceSizes: [400, 800, 1600],
+    // Product photography served from Supabase Storage's public bucket.
+    remotePatterns: [
+      { protocol: "https", hostname: "**.supabase.co", pathname: "/storage/v1/object/public/**" },
+    ],
   },
   async headers() {
     return [

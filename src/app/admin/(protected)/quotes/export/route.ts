@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     .getAll("status")
     .filter((s): s is QuoteStatus => QUOTE_STATUSES.includes(s as QuoteStatus));
 
-  const quotes = listQuotes({
+  const quotes = await listQuotes({
     from: from ? `${from}T00:00:00.000Z` : undefined,
     to: to ? `${to}T23:59:59.999Z` : undefined,
     status: statuses.length ? statuses : undefined,
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   const range = from || to ? `-${from ?? "start"}-to-${to ?? "now"}` : "";
 
-  return new NextResponse(quotesSummaryCsv(quotes), {
+  return new NextResponse((await quotesSummaryCsv(quotes)), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="pinhigh-quote-requests${range}.csv"`,

@@ -32,8 +32,8 @@ export default async function CataloguePage({
   // article numbers in constantly and expect to land on the item, not a list
   // of one.
   if (query) {
-    const exact = findExactArticle(query);
-    if (exact) redirect(`/product/${encodeURIComponent(exact)}`);
+    const exact = await findExactArticle(query);
+    if (exact) redirect(`/product/${(await encodeURIComponent(exact))}`);
   }
 
   /*
@@ -48,8 +48,8 @@ export default async function CataloguePage({
       ? GENDER_LABELS[genderFilter[0] as Gender] ?? "Catalogue"
       : "Catalogue";
 
-  const facets = getFacets();
-  const cards = listCatalogue({
+  const facets = await getFacets();
+  const cards = await listCatalogue({
     brand: toArray(params.brand),
     category: toArray(params.category),
     gender: genderFilter,

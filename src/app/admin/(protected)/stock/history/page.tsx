@@ -18,7 +18,7 @@ export default async function StockHistoryPage({
 }) {
   const params = await searchParams;
   const article = params.article?.trim() || undefined;
-  const rows = listAdjustments(200, article);
+  const rows = await listAdjustments(200, article);
 
   return (
     <div>

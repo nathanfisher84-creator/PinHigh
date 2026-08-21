@@ -5,8 +5,8 @@ import { SubmitButton } from "@/components/admin/SubmitButton";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Settings" };
 
-export default function AdminSettingsPage() {
-  const settings = getSettings();
+export default async function AdminSettingsPage() {
+  const settings = await getSettings();
 
   return (
     <div className="max-w-2xl">

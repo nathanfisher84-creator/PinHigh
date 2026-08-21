@@ -34,12 +34,12 @@ const FEATURED: Category[] = [
   "accessories",
 ];
 
-export default function HomePage() {
-  const counts = getCategoryCounts();
-  const stockDate = getStockAsAt();
-  const totals = getCatalogueTotals();
-  const featured = listCatalogue({ inStockOnly: true, sort: "stock" }).slice(0, 4);
-  const liveCategories = FEATURED.filter((c) => (counts.get(c) ?? 0) > 0);
+export default async function HomePage() {
+  const counts = await getCategoryCounts();
+  const stockDate = await getStockAsAt();
+  const totals = await getCatalogueTotals();
+  const featured = (await listCatalogue({ inStockOnly: true, sort: "stock" })).slice(0, 4);
+  const liveCategories = FEATURED.filter(async (c) => (counts.get(c) ?? 0) > 0);
 
   return (
     <>
@@ -90,7 +90,7 @@ export default function HomePage() {
             <Figure value={String(totals.articles)} label="Articles" />
             <Figure value={String(totals.sizes)} label="Size options" />
             <Figure
-              value={stockDate ? formatDate(stockDate) : "—"}
+              value={stockDate ? (await formatDate(stockDate)) : "—"}
               label="Stock counted"
               small
             />

@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { getSession } from "@/lib/auth";
 import { get } from "@/lib/db";
+import { getArtwork } from "@/lib/images/storage";
 
 /**
  * Customer artwork download (spec §8).
@@ -16,12 +15,6 @@ import { get } from "@/lib/db";
  * verifying the filename against the database stops an authenticated user
  * walking the directory or path-traversing out of it.
  */
-
-const LOGO_DIR = path.join(
-  process.env.PINHIGH_DATA_DIR ?? path.join(process.cwd(), ".data"),
-  "private",
-  "logos",
-);
 
 const CONTENT_TYPES: Record<string, string> = {
   ".ai": "application/postscript",
@@ -46,18 +39,16 @@ export async function GET(
   const name = path.basename(decodeURIComponent(file));
 
   // Only serve a file some quote request actually points at.
-  const owner = get<{ reference: string }>(
+  const owner = await get<{ reference: string }>(
     "SELECT reference FROM quote_requests WHERE logo_path = ?",
     name,
   );
   if (!owner) return new NextResponse("Not found.", { status: 404 });
 
-  const filePath = path.join(LOGO_DIR, name);
-  if (!filePath.startsWith(LOGO_DIR) || !existsSync(filePath)) {
-    return new NextResponse("Not found.", { status: 404 });
-  }
-
-  const buffer = await readFile(filePath);
+  // Through the storage seam: Supabase's private artwork bucket when
+  // configured, local disk otherwise. Never a public URL either way.
+  const buffer = await getArtwork(name);
+  if (!buffer) return new NextResponse("Not found.", { status: 404 });
   const ext = path.extname(name).toLowerCase();
 
   return new NextResponse(new Uint8Array(buffer), {

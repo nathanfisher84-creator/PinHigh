@@ -69,8 +69,8 @@ export interface PreviewResult {
 }
 
 /** Saved manual mappings, reused on later uploads (§4.1). */
-function savedMappings(): Record<string, FieldKey> {
-  const rows = all<{ header: string; field_key: string }>(
+async function savedMappings(): Promise<Record<string, FieldKey>> {
+  const rows = await all<{ header: string; field_key: string }>(
     "SELECT header, field_key FROM column_mappings",
   );
   return Object.fromEntries(rows.map((r) => [r.header, r.field_key as FieldKey]));
@@ -122,10 +122,10 @@ export async function previewStockFile(formData: FormData): Promise<PreviewResul
       };
     }
 
-    parsed = parseStockSheet(sheet.rows, {
-      savedMap: savedMappings(),
+    parsed = (await parseStockSheet(sheet.rows, {
+      savedMap: await savedMappings(),
       overrideMap,
-    });
+    }));
   } catch (err) {
     return {
       ok: false,
@@ -171,7 +171,7 @@ export async function previewStockFile(formData: FormData): Promise<PreviewResul
   const stored = `${token}${path.extname(file.name).toLowerCase() || ".xlsx"}`;
   await writeFile(path.join(UPLOAD_DIR, stored), buffer);
 
-  const diff = buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
+  const diff = await buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
 
   /*
    * An adidas file is an invoice, so applying it twice would count the same
@@ -181,7 +181,7 @@ export async function previewStockFile(formData: FormData): Promise<PreviewResul
   const invoices = parsed.billingDocuments ?? [];
   const alreadyApplied: string[] = [];
   if (invoices.length > 0) {
-    const seen = all<{ invoice_refs: string | null }>(
+    const seen = await all<{ invoice_refs: string | null }>(
       "SELECT invoice_refs FROM stock_imports WHERE status = 'committed' AND invoice_refs IS NOT NULL",
     );
     const applied = new Set<string>();
@@ -210,7 +210,7 @@ export async function previewStockFile(formData: FormData): Promise<PreviewResul
     invoices,
     alreadyApplied,
     needingDetails,
-    summary: summariseDiff(diff),
+    summary: (await summariseDiff(diff)),
     sheetName,
     inferred: parsed.header.inferred,
     ignored: parsed.header.unmatched.map((u) => u.header),
@@ -259,10 +259,10 @@ export async function commitStockFile(
     const buffer = await readFile(filePath);
     const workbook = readWorkbook(buffer, filename);
     const sheet = pickStockSheet(workbook);
-    const parsed = parseStockSheet(sheet.rows, {
-      savedMap: savedMappings(),
+    const parsed = (await parseStockSheet(sheet.rows, {
+      savedMap: await savedMappings(),
       overrideMap,
-    });
+    }));
 
     if (parsed.rows.length === 0) {
       return { ok: false, message: "Nothing importable was found in that file." };
@@ -270,14 +270,14 @@ export async function commitStockFile(
 
     // Rebuild the diff against current data rather than trusting the one the
     // browser is holding — the catalogue may have changed since the preview.
-    const diff = buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
+    const diff = await buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
 
     const invoices = parsed.billingDocuments ?? [];
     const orders = parsed.orderNumbers ?? [];
 
     // Refuse to count a delivery twice unless the owner has said so explicitly.
     if (mode === "add" && invoices.length > 0 && confirmation !== "APPLY-AGAIN") {
-      const seen = all<{ invoice_refs: string | null }>(
+      const seen = await all<{ invoice_refs: string | null }>(
         "SELECT invoice_refs FROM stock_imports WHERE status = 'committed' AND invoice_refs IS NOT NULL",
       );
       const applied = new Set<string>();
@@ -297,20 +297,20 @@ export async function commitStockFile(
       }
     }
 
-    const result = commitImport(parsed.rows, mode, diff, {
+    const result = (await commitImport(parsed.rows, mode, diff, {
       filename,
       storagePath: token,
       uploadedBy: actor,
       invoiceRefs: invoices,
       orderRefs: orders,
-    });
+    }));
 
     // Remember any manual mapping so the owner maps an odd column once (§4.1).
     if (overrideMap) {
       for (const [key, index] of Object.entries(overrideMap)) {
         const header = parsed.header.headers[index as number];
         if (!header) continue;
-        run(
+        await run(
           `INSERT INTO column_mappings (header, field_key, updated_at) VALUES (?,?,?)
            ON CONFLICT(header) DO UPDATE SET field_key = excluded.field_key,
                                             updated_at = excluded.updated_at`,

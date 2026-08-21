@@ -21,7 +21,7 @@ type Params = Promise<{ article_number: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { article_number } = await params;
-  const product = getProductByArticle(decodeURIComponent(article_number));
+  const product = await getProductByArticle(decodeURIComponent(article_number));
   if (!product) return { title: "Product not found" };
 
   return {
@@ -35,16 +35,16 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
 export default async function ProductPage({ params }: { params: Params }) {
   const { article_number } = await params;
-  const product = getProductByArticle(decodeURIComponent(article_number));
+  const product = await getProductByArticle(decodeURIComponent(article_number));
   if (!product) notFound();
 
-  const runs = getColourwayRuns(product);
-  const stockDate = getStockAsAt();
+  const runs = (await getColourwayRuns(product));
+  const stockDate = await getStockAsAt();
   const totalUnits = product.variants.reduce((n, v) => n + v.quantity, 0);
 
   // Related: same category and brand, excluding this style group.
-  const related = listCatalogue({ category: [product.category], brand: [product.brand] })
-    .filter((c) =>
+  const related = (await listCatalogue({ category: [product.category], brand: [product.brand] }))
+    .filter(async (c) =>
       product.style_group
         ? c.style_group !== product.style_group
         : c.article_number !== product.article_number,
@@ -123,7 +123,7 @@ export default async function ProductPage({ params }: { params: Params }) {
           <div className="hairline bg-paper-raised px-4 py-4">
             <p className="text-lg font-medium">{PRICE_ON_REQUEST}</p>
             <p className="mt-1 text-sm text-graphite-ink">{PRICE_NOTE}</p>
-            <p className="mt-3 tabular text-xs text-graphite-ink">{stockAsAt(stockDate)}</p>
+            <p className="mt-3 tabular text-xs text-graphite-ink">{(await stockAsAt(stockDate))}</p>
           </div>
 
           {totalUnits === 0 && (

@@ -123,7 +123,11 @@ export function ImageManager({
             <li key={img.id} className="hairline bg-paper">
               <div className="relative aspect-square bg-paper-sunken">
                 <Image
-                  src={img.storage_path.startsWith("/") ? img.storage_path : `/images/${img.storage_path}`}
+                  src={
+                    img.storage_path.startsWith("/") || img.storage_path.startsWith("http")
+                      ? img.storage_path
+                      : `/images/${img.storage_path}`
+                  }
                   alt={img.alt_text ?? ""}
                   fill
                   sizes="200px"

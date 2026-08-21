@@ -12,8 +12,8 @@ export interface RecipientRow {
   is_active: number;
 }
 
-export default function AdminRecipientsPage() {
-  const recipients = all<RecipientRow>(
+export default async function AdminRecipientsPage() {
+  const recipients = await all<RecipientRow>(
     "SELECT id, name, channel, value, is_active FROM notification_recipients ORDER BY channel ASC, name ASC",
   );
 

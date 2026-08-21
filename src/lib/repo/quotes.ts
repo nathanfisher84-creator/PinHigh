@@ -64,10 +64,10 @@ function toLine(r: LineRow): QuoteLine {
  * reset. Called inside the same transaction as the insert, and the UNIQUE
  * constraint on `reference` is the real guarantee against a collision.
  */
-function nextReference(): string {
+async function nextReference(): Promise<string> {
   const year = new Date().getFullYear();
   const prefix = `PH-Q-${year}-`;
-  const row = get<{ reference: string }>(
+  const row = await get<{ reference: string }>(
     `SELECT reference FROM quote_requests
       WHERE reference LIKE ? ORDER BY reference DESC LIMIT 1`,
     `${prefix}%`,
@@ -106,7 +106,7 @@ export interface CreateQuoteInput {
   }[];
 }
 
-export function createQuoteRequest(input: CreateQuoteInput): QuoteRequestWithLines {
+export async function createQuoteRequest(input: CreateQuoteInput): Promise<QuoteRequestWithLines> {
   const id = uid();
   const timestamp = now();
 
@@ -119,10 +119,10 @@ export function createQuoteRequest(input: CreateQuoteInput): QuoteRequestWithLin
 
   let reference = "";
 
-  transaction(() => {
-    reference = nextReference();
+  await transaction(async () => {
+    reference = await nextReference();
 
-    run(
+    await run(
       `INSERT INTO quote_requests (
          id, reference, company_name, trn, contact_name, contact_role, email, phone,
          delivery_emirate, required_by, notes, total_units, indicative_value,
@@ -154,8 +154,8 @@ export function createQuoteRequest(input: CreateQuoteInput): QuoteRequestWithLin
       timestamp,
     );
 
-    input.lines.forEach((line, i) => {
-      run(
+    for (const [i, line] of input.lines.entries()) {
+      await run(
         `INSERT INTO quote_lines (
            id, quote_request_id, sku, article_number, brand, style_name, colour, size,
            quantity, unit_price, line_total, branding_placements, stock_flag, sort_order
@@ -175,35 +175,35 @@ export function createQuoteRequest(input: CreateQuoteInput): QuoteRequestWithLin
         line.stock_flag,
         i,
       );
-    });
+    }
   });
 
-  audit("quote.create", reference, { units: totalUnits, lines: input.lines.length });
+  await audit("quote.create", reference, { units: totalUnits, lines: input.lines.length });
 
-  return getQuoteByReference(reference)!;
+  return (await getQuoteByReference(reference))!;
 }
 
 /* -------------------------------------------------------------------------
    Read
    ---------------------------------------------------------------------- */
 
-export function getQuoteByReference(reference: string): QuoteRequestWithLines | null {
-  const row = get<QuoteRow>("SELECT * FROM quote_requests WHERE reference = ?", reference);
+export async function getQuoteByReference(reference: string): Promise<QuoteRequestWithLines | null> {
+  const row = await get<QuoteRow>("SELECT * FROM quote_requests WHERE reference = ?", reference);
   if (!row) return null;
   return withLines(toQuote(row));
 }
 
-export function getQuoteById(id: string): QuoteRequestWithLines | null {
-  const row = get<QuoteRow>("SELECT * FROM quote_requests WHERE id = ?", id);
+export async function getQuoteById(id: string): Promise<QuoteRequestWithLines | null> {
+  const row = await get<QuoteRow>("SELECT * FROM quote_requests WHERE id = ?", id);
   if (!row) return null;
   return withLines(toQuote(row));
 }
 
-function withLines(quote: QuoteRequest): QuoteRequestWithLines {
-  const lines = all<LineRow>(
+async function withLines(quote: QuoteRequest): Promise<QuoteRequestWithLines> {
+  const lines = (await all<LineRow>(
     "SELECT * FROM quote_lines WHERE quote_request_id = ? ORDER BY sort_order ASC",
     quote.id,
-  ).map(toLine);
+  )).map(toLine);
   return { ...quote, lines };
 }
 
@@ -216,7 +216,7 @@ export interface QuoteListFilters {
   limit?: number;
 }
 
-export function listQuotes(filters: QuoteListFilters = {}): QuoteRequest[] {
+export async function listQuotes(filters: QuoteListFilters = {}): Promise<QuoteRequest[]> {
   const clauses: string[] = ["1=1"];
   const params: unknown[] = [];
 
@@ -244,24 +244,24 @@ export function listQuotes(filters: QuoteListFilters = {}): QuoteRequest[] {
     params.push(q, q, q, q);
   }
 
-  return all<QuoteRow>(
+  return (await all<QuoteRow>(
     `SELECT * FROM quote_requests WHERE ${clauses.join(" AND ")}
       ORDER BY created_at DESC LIMIT ?`,
     ...params,
     filters.limit ?? 200,
-  ).map(toQuote);
+  )).map(toQuote);
 }
 
 /* -------------------------------------------------------------------------
    Update
    ---------------------------------------------------------------------- */
 
-export function updateQuoteStatus(id: string, status: QuoteStatus) {
-  run("UPDATE quote_requests SET status = ?, updated_at = ? WHERE id = ?", status, now(), id);
-  audit("quote.status", id, { status });
+export async function updateQuoteStatus(id: string, status: QuoteStatus) {
+  await run("UPDATE quote_requests SET status = ?, updated_at = ? WHERE id = ?", status, now(), id);
+  await audit("quote.status", id, { status });
 }
 
-export function updateQuoteFields(
+export async function updateQuoteFields(
   id: string,
   fields: { quoted_value?: number | null; internal_notes?: string | null },
 ) {
@@ -278,17 +278,17 @@ export function updateQuoteFields(
   if (sets.length === 0) return;
   sets.push("updated_at = ?");
   params.push(now(), id);
-  run(`UPDATE quote_requests SET ${sets.join(", ")} WHERE id = ?`, ...params);
-  audit("quote.update", id, fields);
+  await run(`UPDATE quote_requests SET ${sets.join(", ")} WHERE id = ?`, ...params);
+  await audit("quote.update", id, fields);
 }
 
-export function recordNotification(
+export async function recordNotification(
   id: string,
   channel: "email" | "whatsapp",
   log: NotificationLog,
 ) {
   const column = channel === "email" ? "notified_email" : "notified_whatsapp";
-  run(
+  await run(
     `UPDATE quote_requests SET ${column} = ?, updated_at = ? WHERE id = ?`,
     JSON.stringify(log),
     now(),
@@ -315,7 +315,7 @@ export interface DashboardStats {
   lastImportAt: string | null;
 }
 
-export function getDashboardStats(): DashboardStats {
+export async function getDashboardStats(): Promise<DashboardStats> {
   const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const monthStart = new Date(
@@ -325,47 +325,47 @@ export function getDashboardStats(): DashboardStats {
   ).toISOString();
 
   const awaiting =
-    get<{ n: number }>("SELECT COUNT(*) AS n FROM quote_requests WHERE status = 'new'")?.n ?? 0;
+    (await get<{ n: number }>("SELECT COUNT(*) AS n FROM quote_requests WHERE status = 'new'"))?.n ?? 0;
 
-  const stale = all<QuoteRow>(
+  const stale = (await all<QuoteRow>(
     `SELECT * FROM quote_requests WHERE status = 'new' AND created_at < ?
       ORDER BY created_at ASC LIMIT 20`,
     dayAgo,
-  ).map(toQuote);
+  )).map(toQuote);
 
   const thisWeek =
-    get<{ n: number }>("SELECT COUNT(*) AS n FROM quote_requests WHERE created_at >= ?", weekAgo)
+    (await get<{ n: number }>("SELECT COUNT(*) AS n FROM quote_requests WHERE created_at >= ?", weekAgo))
       ?.n ?? 0;
 
   const unitsThisMonth =
-    get<{ n: number }>(
+    (await get<{ n: number }>(
       "SELECT COALESCE(SUM(total_units), 0) AS n FROM quote_requests WHERE created_at >= ?",
       monthStart,
-    )?.n ?? 0;
+    ))?.n ?? 0;
 
   const quotedCount =
-    get<{ n: number }>(
+    (await get<{ n: number }>(
       "SELECT COUNT(*) AS n FROM quote_requests WHERE status IN ('quoted','won','lost')",
-    )?.n ?? 0;
+    ))?.n ?? 0;
   const wonCount =
-    get<{ n: number }>("SELECT COUNT(*) AS n FROM quote_requests WHERE status = 'won'")?.n ?? 0;
+    (await get<{ n: number }>("SELECT COUNT(*) AS n FROM quote_requests WHERE status = 'won'"))?.n ?? 0;
 
   const lowStock =
-    get<{ n: number }>(
+    (await get<{ n: number }>(
       `SELECT COUNT(*) AS n FROM variants v JOIN products p ON p.id = v.product_id
         WHERE p.is_visible = 1 AND v.quantity > 0 AND v.quantity < 10`,
-    )?.n ?? 0;
+    ))?.n ?? 0;
 
   // A notification that never landed is the failure mode that silently loses a
   // lead, so it is surfaced loudly rather than left in a log (§9).
-  const failedNotifications = all<QuoteRow>(
+  const failedNotifications = (await all<QuoteRow>(
     `SELECT * FROM quote_requests
       WHERE notified_email LIKE '%"status":"failed"%'
          OR notified_whatsapp LIKE '%"status":"failed"%'
       ORDER BY created_at DESC LIMIT 20`,
-  ).map(toQuote);
+  )).map(toQuote);
 
-  const lastImport = get<{ created_at: string }>(
+  const lastImport = await get<{ created_at: string }>(
     "SELECT created_at FROM stock_imports WHERE status = 'committed' ORDER BY created_at DESC LIMIT 1",
   );
 

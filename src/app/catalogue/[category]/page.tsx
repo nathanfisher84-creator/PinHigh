@@ -43,8 +43,8 @@ export default async function CategoryPage({
   const query = await searchParams;
   const label = CATEGORY_LABELS[category as Category];
 
-  const facets = getFacets();
-  const cards = listCatalogue({
+  const facets = await getFacets();
+  const cards = await listCatalogue({
     category: [category],
     brand: toArray(query.brand),
     gender: toArray(query.gender),

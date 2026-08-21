@@ -65,14 +65,14 @@ export async function login(
 
   const session = verifyCredentials(email, password);
   if (!session) {
-    audit("admin.login.failed", email);
+    await audit("admin.login.failed", email);
     // One message for both cases — telling an attacker which half was wrong is
     // free information.
     return { error: "That email and password don't match." };
   }
 
   await setSession(session);
-  audit("admin.login", session.email);
+  await audit("admin.login", session.email);
   redirect(next.startsWith("/admin") ? next : "/admin");
 }
 
@@ -110,7 +110,7 @@ export async function saveQuoteDetails(id: string, formData: FormData) {
 
 export async function resendNotifications(id: string): Promise<{ message: string }> {
   await requireAdmin();
-  const quote = getQuoteById(id);
+  const quote = await getQuoteById(id);
   if (!quote) return { message: "That request no longer exists." };
 
   const result = await resendQuoteNotifications(quote);
@@ -141,7 +141,7 @@ export async function resendNotifications(id: string): Promise<{ message: string
 export async function rollbackStockImport(importId: string): Promise<{ message: string }> {
   await requireAdmin();
   try {
-    const { restored } = rollbackImport(importId);
+    const { restored } = await rollbackImport(importId);
     revalidatePath("/admin/stock");
     revalidatePath("/catalogue");
     revalidatePath("/");
@@ -179,7 +179,7 @@ export async function saveProduct(id: string, formData: FormData) {
     styleName !== String(formData.get("article_number") ?? "") &&
     colour.length > 0;
 
-  run(
+  await run(
     `UPDATE products SET
        style_name = ?, colour = ?, category = ?, gender = ?,
        description = ?, fabric = ?, season = ?, colour_hex = ?,
@@ -207,7 +207,7 @@ export async function saveProduct(id: string, formData: FormData) {
     id,
   );
 
-  audit("product.update", id);
+  await audit("product.update", id);
   revalidatePath("/admin/products");
   revalidatePath("/catalogue");
   revalidatePath("/");
@@ -216,14 +216,14 @@ export async function saveProduct(id: string, formData: FormData) {
 export async function setProductVisibility(ids: string[], visible: boolean) {
   await requireAdmin();
   if (ids.length === 0) return;
-  run(
+  await run(
     `UPDATE products SET is_visible = ?, updated_at = ?
       WHERE id IN (${ids.map(() => "?").join(",")})`,
     visible ? 1 : 0,
     now(),
     ...ids,
   );
-  audit("product.visibility", undefined, { ids, visible });
+  await audit("product.visibility", undefined, { ids, visible });
   revalidatePath("/admin/products");
   revalidatePath("/catalogue");
 }
@@ -247,7 +247,7 @@ export async function addRecipient(formData: FormData): Promise<{ error?: string
     return { error: "Enter a WhatsApp number in full international format, e.g. +971501234567." };
   }
 
-  run(
+  await run(
     `INSERT INTO notification_recipients (id, name, channel, value, is_active, receives)
      VALUES (?,?,?,?,1,?)`,
     uid(),
@@ -257,22 +257,22 @@ export async function addRecipient(formData: FormData): Promise<{ error?: string
     JSON.stringify(["quote_request"]),
   );
 
-  audit("recipient.add", value, { channel });
+  await audit("recipient.add", value, { channel });
   revalidatePath("/admin/recipients");
   return {};
 }
 
 export async function toggleRecipient(id: string, active: boolean) {
   await requireAdmin();
-  run("UPDATE notification_recipients SET is_active = ? WHERE id = ?", active ? 1 : 0, id);
-  audit("recipient.toggle", id, { active });
+  await run("UPDATE notification_recipients SET is_active = ? WHERE id = ?", active ? 1 : 0, id);
+  await audit("recipient.toggle", id, { active });
   revalidatePath("/admin/recipients");
 }
 
 export async function removeRecipient(id: string) {
   await requireAdmin();
-  run("DELETE FROM notification_recipients WHERE id = ?", id);
-  audit("recipient.remove", id);
+  await run("DELETE FROM notification_recipients WHERE id = ?", id);
+  await audit("recipient.remove", id);
   revalidatePath("/admin/recipients");
 }
 
@@ -280,7 +280,7 @@ export async function testWhatsApp(value: string): Promise<{ message: string }> 
   await requireAdmin();
   try {
     await sendWhatsAppTest(value);
-    audit("recipient.test", value);
+    await audit("recipient.test", value);
     return { message: `Test message sent to ${value}. Check the handset.` };
   } catch (err) {
     return {
@@ -308,21 +308,21 @@ export async function saveSettings(formData: FormData) {
   for (const key of EDITABLE_SETTINGS) {
     if (!formData.has(key)) {
       // Unchecked checkboxes are absent from the payload entirely.
-      if (key === "show_non_new_stock") setSetting(key, "false");
+      if (key === "show_non_new_stock") await setSetting(key, "false");
       continue;
     }
     const raw = formData.get(key);
     const value = raw === "on" ? "true" : String(raw ?? "");
-    setSetting(key, value);
+    await setSetting(key, value);
   }
 
-  audit("settings.update");
+  await audit("settings.update");
   revalidatePath("/admin/settings");
   revalidatePath("/", "layout");
 }
 
 export async function getAnnouncement(): Promise<string> {
-  return getSetting("announcement");
+  return await getSetting("announcement");
 }
 
 /* -------------------------------------------------------------------------
@@ -348,7 +348,7 @@ export async function saveStockAdjustment(
     return { ok: false, message: "Nothing to save." };
   }
 
-  const result = adjustStock(changes, reason, note.trim() || null, session.email);
+  const result = await adjustStock(changes, reason, note.trim() || null, session.email);
 
   revalidatePath("/admin/stock");
   revalidatePath("/admin");
@@ -381,7 +381,7 @@ export async function setCorporatePrices(
     return { ok: false, message: "That price isn't a number." };
   }
 
-  run(
+  await run(
     `UPDATE products SET price_wholesale = ?, updated_at = ?
       WHERE id IN (${ids.map(() => "?").join(",")})`,
     price,
@@ -389,7 +389,7 @@ export async function setCorporatePrices(
     ...ids,
   );
 
-  audit("product.price.bulk", undefined, { ids: ids.length, price }, session.email);
+  await audit("product.price.bulk", undefined, { ids: ids.length, price }, session.email);
   revalidatePath("/admin/products");
   revalidatePath("/catalogue");
 

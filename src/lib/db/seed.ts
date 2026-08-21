@@ -46,15 +46,15 @@ const PLACEMENTS: Record<string, string[]> = {
   accessories: ["Single position"],
 };
 
-function seedBrandingPlacements() {
-  const existing = get<{ n: number }>("SELECT COUNT(*) AS n FROM branding_placements");
+async function seedBrandingPlacements() {
+  const existing = await get<{ n: number }>("SELECT COUNT(*) AS n FROM branding_placements");
   if ((existing?.n ?? 0) > 0) return;
 
   for (const category of CATEGORIES) {
     const labels = PLACEMENTS[category];
     if (!labels) continue; // shoes, clubs, rangefinders, trolleys, junior-sets
-    labels.forEach((label, i) => {
-      run(
+    for (const [i, label] of labels.entries()) {
+      await run(
         `INSERT INTO branding_placements (id, category, label, sort_order, is_active)
          VALUES (?,?,?,?,1)`,
         uid(),
@@ -62,7 +62,7 @@ function seedBrandingPlacements() {
         label,
         i,
       );
-    });
+    }
   }
 }
 
@@ -70,8 +70,8 @@ function seedBrandingPlacements() {
    Notification recipients (§7.3)
    ---------------------------------------------------------------------- */
 
-function seedRecipients() {
-  const existing = get<{ n: number }>("SELECT COUNT(*) AS n FROM notification_recipients");
+async function seedRecipients() {
+  const existing = await get<{ n: number }>("SELECT COUNT(*) AS n FROM notification_recipients");
   if ((existing?.n ?? 0) > 0) return;
 
   // Placeholders. The owner replaces these in Admin → Recipients before
@@ -82,7 +82,7 @@ function seedRecipients() {
     ["Corporate desk", "email", "corporate@pinhighuae.com"],
   ];
   for (const [name, channel, value] of seeds) {
-    run(
+    await run(
       `INSERT INTO notification_recipients (id, name, channel, value, is_active, receives)
        VALUES (?,?,?,?,1,?)`,
       uid(),
@@ -113,9 +113,9 @@ function seedFile(name: string): string | null {
  * regresses the site comes up wrong immediately, rather than the failure
  * hiding until someone uploads a real file.
  */
-function importSeedFile(
+async function importSeedFile(
   file: string,
-): { rows: number; source?: string; invoices?: string[]; orders?: string[] } | null {
+): Promise<{ rows: number; source?: string; invoices?: string[]; orders?: string[] } | null> {
   const buf = readFileSync(file);
   const workbook = readWorkbook(buf, path.basename(file));
   const sheet = pickStockSheet(workbook);
@@ -129,19 +129,19 @@ function importSeedFile(
         ? "add"
         : "upsert";
 
-  const diff = buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
-  commitImport(parsed.rows, mode, diff, {
+  const diff = await buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
+  (await commitImport(parsed.rows, mode, diff, {
     filename: path.basename(file),
     uploadedBy: "seed",
     invoiceRefs: parsed.billingDocuments,
     orderRefs: parsed.orderNumbers,
-  });
+  }));
 
   return { rows: parsed.rows.length, source: parsed.source };
 }
 
-function seedCatalogue(): boolean {
-  const existing = get<{ n: number }>("SELECT COUNT(*) AS n FROM products");
+async function seedCatalogue(): Promise<boolean> {
+  const existing = await get<{ n: number }>("SELECT COUNT(*) AS n FROM products");
   if ((existing?.n ?? 0) > 0) return false;
 
   /*
@@ -151,7 +151,7 @@ function seedCatalogue(): boolean {
    * instead of 750. This claim is atomic in SQLite, so exactly one process
    * wins and the rest return.
    */
-  const claim = run(
+  const claim = await run(
     `INSERT INTO settings (key, value, updated_at) VALUES ('seed_claim', ?, ?)
      ON CONFLICT(key) DO NOTHING`,
     String(process.pid),
@@ -204,8 +204,8 @@ const COLOUR_WORDS: [RegExp, string][] = [
   [/\bcrew navy\b/i, "#25324F"],
 ];
 
-function applyColourHex() {
-  const products = all<{ id: string; colour: string }>(
+async function applyColourHex() {
+  const products = await all<{ id: string; colour: string }>(
     "SELECT id, colour FROM products WHERE colour_hex IS NULL",
   );
   for (const p of products) {
@@ -214,7 +214,7 @@ function applyColourHex() {
     const match =
       COLOUR_WORDS.find(([re]) => re.test(lead)) ?? COLOUR_WORDS.find(([re]) => re.test(p.colour));
     if (match) {
-      run("UPDATE products SET colour_hex = ? WHERE id = ?", match[1], p.id);
+      await run("UPDATE products SET colour_hex = ? WHERE id = ?", match[1], p.id);
     }
   }
 }
@@ -240,11 +240,11 @@ function applyColourHex() {
  * One image per article. The full pack, with all five views, goes in through
  * Admin → Products.
  */
-function seedImages(): number {
+async function seedImages(): Promise<number> {
   const dir = path.join(process.cwd(), "public", "seed-images");
   if (!existsSync(dir)) return 0;
 
-  const existing = get<{ n: number }>("SELECT COUNT(*) AS n FROM product_images");
+  const existing = await get<{ n: number }>("SELECT COUNT(*) AS n FROM product_images");
   if ((existing?.n ?? 0) > 0) return 0;
 
   // Largest rendition per article: `HZ6891-800.webp`.
@@ -261,13 +261,13 @@ function seedImages(): number {
 
   let added = 0;
   for (const [article, { file }] of widest) {
-    const product = get<{ id: string; brand: string; style_name: string; colour: string }>(
+    const product = await get<{ id: string; brand: string; style_name: string; colour: string }>(
       "SELECT id, brand, style_name, colour FROM products WHERE article_number = ?",
       article,
     );
     if (!product) continue;
 
-    run(
+    await run(
       `INSERT INTO product_images (id, product_id, storage_path, alt_text, is_primary, sort_order)
        VALUES (?,?,?,?,1,0)`,
       uid(),
@@ -286,19 +286,19 @@ function seedImages(): number {
    Entry point
    ---------------------------------------------------------------------- */
 
-export function ensureSeeded(): void {
+export async function ensureSeeded(): Promise<void> {
   if (globalThis.__pinhighSeeded) return;
   globalThis.__pinhighSeeded = true;
 
   try {
     seedBrandingPlacements();
     seedRecipients();
-    const seeded = seedCatalogue();
+    const seeded = await seedCatalogue();
 
     if (seeded) seedImages();
 
-    if (seeded && !get("SELECT 1 FROM settings WHERE key = 'seeded_at'")) {
-      setSetting("seeded_at", now());
+    if (seeded && !await get("SELECT 1 FROM settings WHERE key = 'seeded_at'")) {
+      await setSetting("seeded_at", now());
     }
   } catch (err) {
     // A failed seed must not take the site down — an empty catalogue with a

@@ -1,9 +1,9 @@
 "use server";
 
 import { headers } from "next/headers";
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { putArtwork } from "@/lib/images/storage";
 import { quoteRequestSchema } from "@/lib/validation/quote";
 import { getVariantsBySku } from "@/lib/repo/catalogue";
 import { createQuoteRequest } from "@/lib/repo/quotes";
@@ -27,12 +27,6 @@ export interface SubmitResult {
   errors?: Record<string, string>;
   message?: string;
 }
-
-const LOGO_DIR = path.join(
-  process.env.PINHIGH_DATA_DIR ?? path.join(process.cwd(), ".data"),
-  "private",
-  "logos",
-);
 
 /** Vector strongly preferred, raster accepted with a warning (§8). */
 const LOGO_TYPES = new Map<string, string>([
@@ -58,10 +52,11 @@ async function storeLogo(file: File): Promise<string | null> {
   const ext = LOGO_TYPES.get(file.type) ?? (extFromName || "bin");
 
   // Customers' trademarks. Stored privately with a random name, served only
-  // through an admin-authenticated route — never from a public directory (§8).
-  await mkdir(LOGO_DIR, { recursive: true });
+  // through an admin-authenticated route — never from a public bucket or
+  // directory (§8). putArtwork lands in Supabase's private bucket when
+  // configured, local disk otherwise.
   const stored = `${randomUUID()}.${ext.replace(/[^a-z0-9]/g, "").slice(0, 8)}`;
-  await writeFile(path.join(LOGO_DIR, stored), Buffer.from(await file.arrayBuffer()));
+  await putArtwork(stored, Buffer.from(await file.arrayBuffer()), file.type || "application/octet-stream");
   return stored;
 }
 
@@ -151,7 +146,7 @@ export async function submitQuoteRequest(formData: FormData): Promise<SubmitResu
 
   /* -- Re-price and re-check stock server-side (§7.2 step 3) ------------- */
 
-  const live = getVariantsBySku(input.lines.map((l) => l.sku));
+  const live = await getVariantsBySku(input.lines.map((l) => l.sku));
 
   const resolved = input.lines.map((line) => {
     const variant = live.get(line.sku);
@@ -204,7 +199,7 @@ export async function submitQuoteRequest(formData: FormData): Promise<SubmitResu
 
   let quote;
   try {
-    quote = createQuoteRequest({
+    quote = (await createQuoteRequest({
       company_name: input.company_name,
       trn: input.trn || null,
       contact_name: input.contact_name,
@@ -217,7 +212,7 @@ export async function submitQuoteRequest(formData: FormData): Promise<SubmitResu
       logo_path: logoPath,
       logo_notes: input.logo_notes || null,
       lines: resolved,
-    });
+    }));
   } catch (err) {
     console.error("[pinhigh] quote create failed:", err);
     return {
@@ -259,7 +254,7 @@ export async function captureStockAlert(
   }
 
   try {
-    run(
+    await run(
       `INSERT INTO stock_alerts (id, article_number, email, created_at)
        VALUES (?,?,?,?)
        ON CONFLICT(article_number, email) DO NOTHING`,

@@ -8,8 +8,8 @@ export const metadata: Metadata = {
     "Pin High is a Dubai-based distributor supplying UAE companies with golf apparel, footwear and equipment for corporate events, gifting and staff kit.",
 };
 
-export default function AboutPage() {
-  const brands = listBrands();
+export default async function AboutPage() {
+  const brands = await listBrands();
 
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 py-12">

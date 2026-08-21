@@ -38,8 +38,8 @@ function toProduct(r: ProductRow): Product {
  * equipment into a trade catalogue without saying so loses professional
  * buyers, so the default is the safe one and the override is explicit.
  */
-function conditionClause(): string {
-  return getSetting("show_non_new_stock") === "true" ? "" : " AND p.condition = 'new'";
+async function conditionClause(): Promise<string> {
+  return await getSetting("show_non_new_stock") === "true" ? "" : " AND p.condition = 'new'";
 }
 
 const VISIBLE = "p.is_visible = 1";
@@ -97,20 +97,21 @@ interface JoinedRow extends ProductRow {
  * styles (§15.1); above ~2,000 this needs server-side pagination and a search
  * index, and the assumption should be re-tested rather than this query tuned.
  */
-function fetchCards(where: string, params: unknown[]): JoinedRow[] {
-  return all<JoinedRow>(
+async function fetchCards(where: string, params: unknown[]): Promise<JoinedRow[]> {
+  return await all<JoinedRow>(
     `SELECT p.*,
             COALESCE(v.total_quantity, 0) AS total_quantity,
-            CASE WHEN img.storage_path LIKE '/%' THEN img.storage_path
+            CASE WHEN img.storage_path LIKE '/%' OR img.storage_path LIKE 'http%'
+                 THEN img.storage_path
                  ELSE '/images/' || img.storage_path END AS image,
             COALESCE(v.sizes_json, '[]') AS sizes_json
        FROM products p
        LEFT JOIN (
          SELECT product_id,
                 SUM(quantity) AS total_quantity,
-                json_group_array(
-                  json_object('size', size, 'quantity', quantity, 'o', size_order)
-                ) AS sizes_json
+                json_agg(
+                  json_build_object('size', size, 'quantity', quantity, 'o', size_order)
+                )::text AS sizes_json
            FROM variants
           GROUP BY product_id
        ) v ON v.product_id = p.id
@@ -198,7 +199,7 @@ function collapse(rows: JoinedRow[]): CatalogueCard[] {
   return cards;
 }
 
-export function listCatalogue(filters: CatalogueFilters = {}): CatalogueCard[] {
+export async function listCatalogue(filters: CatalogueFilters = {}): Promise<CatalogueCard[]> {
   const clauses = [VISIBLE];
   const params: unknown[] = [];
 
@@ -231,12 +232,12 @@ export function listCatalogue(filters: CatalogueFilters = {}): CatalogueCard[] {
     params.push(q, q, q, q, q);
   }
 
-  let where = clauses.join(" AND ") + conditionClause();
+  let where = clauses.join(" AND ") + (await conditionClause());
 
   // "In stock only" is applied after grouping so a card is kept when *any* of
   // its colourways has stock — hiding the whole style because the lead colour
   // sold out would be wrong.
-  const rows = fetchCards(where, params);
+  const rows = await fetchCards(where, params);
   let cards = collapse(rows);
 
   if (filters.inStockOnly) {
@@ -292,10 +293,10 @@ function sortCards(cards: CatalogueCard[], filters: CatalogueFilters): Catalogue
    Product detail
    ---------------------------------------------------------------------- */
 
-export function getProductByArticle(
+export async function getProductByArticle(
   articleNumber: string,
-): ProductWithVariants | null {
-  const row = get<ProductRow>(
+): Promise<ProductWithVariants | null> {
+  const row = await get<ProductRow>(
     `SELECT * FROM products WHERE article_number = ? AND is_visible = 1`,
     articleNumber,
   );
@@ -303,21 +304,25 @@ export function getProductByArticle(
 
   const product = toProduct(row);
 
-  const variants = all<Variant>(
-    `SELECT * FROM variants WHERE product_id = ? ORDER BY size_order ASC`,
-    product.id,
+  const variants = (
+    await all<Variant>(
+      `SELECT * FROM variants WHERE product_id = ? ORDER BY size_order ASC`,
+      product.id,
+    )
   ).sort(bySizeOrder);
 
-  const images = all<Omit<ProductImage, "is_primary"> & { is_primary: number }>(
-    `SELECT * FROM product_images WHERE product_id = ?
-      ORDER BY is_primary DESC, sort_order ASC`,
-    product.id,
+  const images = (
+    await all<Omit<ProductImage, "is_primary"> & { is_primary: number }>(
+      `SELECT * FROM product_images WHERE product_id = ?
+        ORDER BY is_primary DESC, sort_order ASC`,
+      product.id,
+    )
   ).map((i) => ({ ...i, is_primary: !!i.is_primary }));
 
   // Sibling colourways. When style_group is null this is empty and the product
   // simply stands alone — no function may depend on the grouping (§3).
   const siblings = product.style_group
-    ? all<{
+    ? await all<{
         article_number: string;
         colour: string;
         colour_hex: string | null;
@@ -327,7 +332,8 @@ export function getProductByArticle(
         `SELECT p.article_number, p.colour, p.colour_hex,
                 COALESCE((SELECT SUM(quantity) FROM variants v WHERE v.product_id = p.id), 0)
                   AS total_quantity,
-                (SELECT CASE WHEN storage_path LIKE '/%' THEN storage_path
+                (SELECT CASE WHEN storage_path LIKE '/%' OR storage_path LIKE 'http%'
+                             THEN storage_path
                              ELSE '/images/' || storage_path END
                    FROM product_images i
                   WHERE i.product_id = p.id
@@ -370,24 +376,28 @@ export interface ColourwayRun {
   variants: { sku: string; size: string; size_order: number; quantity: number }[];
 }
 
-export function getColourwayRuns(product: ProductWithVariants): ColourwayRun[] {
+export async function getColourwayRuns(product: ProductWithVariants): Promise<ColourwayRun[]> {
   const articles = product.style_group
-    ? all<ProductRow>(
-        `SELECT * FROM products WHERE style_group = ? AND is_visible = 1 ORDER BY colour ASC`,
-        product.style_group,
+    ? (
+        await all<ProductRow>(
+          `SELECT * FROM products WHERE style_group = ? AND is_visible = 1 ORDER BY colour ASC`,
+          product.style_group,
+        )
       ).map(toProduct)
     : [product];
 
   // A standalone product still goes through this path, so nothing downstream
   // needs to know whether a style group exists (§3).
-  return articles.map((p) => {
-    const variants = all<{ sku: string; size: string; size_order: number; quantity: number }>(
+  return Promise.all(
+    articles.map(async (p) => {
+    const variants = await all<{ sku: string; size: string; size_order: number; quantity: number }>(
       `SELECT sku, size, size_order, quantity FROM variants
         WHERE product_id = ? ORDER BY size_order ASC`,
       p.id,
     );
-    const image = get<{ storage_path: string }>(
-      `SELECT CASE WHEN storage_path LIKE '/%' THEN storage_path
+    const image = await get<{ storage_path: string }>(
+      `SELECT CASE WHEN storage_path LIKE '/%' OR storage_path LIKE 'http%'
+                   THEN storage_path
                    ELSE '/images/' || storage_path END AS storage_path
          FROM product_images WHERE product_id = ?
         ORDER BY is_primary DESC, sort_order ASC LIMIT 1`,
@@ -405,24 +415,27 @@ export function getColourwayRuns(product: ProductWithVariants): ColourwayRun[] {
       image: image?.storage_path ?? null,
       variants,
     };
-  });
+    }),
+  );
 }
 
 /** Placements the owner has enabled for a category (§8). */
-export function getBrandingPlacements(category: string): string[] {
-  return all<{ label: string }>(
-    `SELECT label FROM branding_placements
-      WHERE category = ? AND is_active = 1 ORDER BY sort_order ASC`,
-    category,
+export async function getBrandingPlacements(category: string): Promise<string[]> {
+  return (
+    await all<{ label: string }>(
+      `SELECT label FROM branding_placements
+        WHERE category = ? AND is_active = 1 ORDER BY sort_order ASC`,
+      category,
+    )
   ).map((r) => r.label);
 }
 
 /** Exact article-number lookup for search. Must rank first and jump straight
  *  to the product (§6.2) — buyers paste article numbers in constantly. */
-export function findExactArticle(query: string): string | null {
+export async function findExactArticle(query: string): Promise<string | null> {
   const q = query.trim();
   if (!q) return null;
-  const row = get<{ article_number: string }>(
+  const row = await get<{ article_number: string }>(
     `SELECT article_number FROM products
       WHERE (LOWER(article_number) = LOWER(?)
              OR EXISTS (SELECT 1 FROM variants v
@@ -445,34 +458,36 @@ export interface Facet {
   count: number;
 }
 
-function facet(column: string): Facet[] {
-  return all<{ value: string; count: number }>(
+async function facet(column: string): Promise<Facet[]> {
+  const rows = await all<{ value: string; count: number }>(
     `SELECT ${column} AS value, COUNT(*) AS count
        FROM products p
-      WHERE ${VISIBLE}${conditionClause()} AND ${column} IS NOT NULL AND ${column} <> ''
+      WHERE ${VISIBLE}${await conditionClause()} AND ${column} IS NOT NULL AND ${column} <> ''
       GROUP BY ${column}
       ORDER BY count DESC, value ASC`,
-  ).map((r) => ({ value: r.value, label: r.value, count: r.count }));
+  );
+  return rows.map((r) => ({ value: r.value, label: r.value, count: r.count }));
 }
 
-export function getFacets() {
-  return {
-    brands: facet("p.brand"),
-    categories: facet("p.category"),
-    genders: facet("p.gender"),
-    conditions: facet("p.condition"),
-  };
+export async function getFacets() {
+  const [brands, categories, genders, conditions] = await Promise.all([
+    facet("p.brand"),
+    facet("p.category"),
+    facet("p.gender"),
+    facet("p.condition"),
+  ]);
+  return { brands, categories, genders, conditions };
 }
 
 /** Brands with a product count, for the home page logo strip and brand pages. */
-export function listBrands(): Facet[] {
+export function listBrands(): Promise<Facet[]> {
   return facet("p.brand");
 }
 
-export function getCategoryCounts(): Map<string, number> {
-  const rows = all<{ category: string; count: number }>(
+export async function getCategoryCounts(): Promise<Map<string, number>> {
+  const rows = await all<{ category: string; count: number }>(
     `SELECT category, COUNT(*) AS count FROM products p
-      WHERE ${VISIBLE}${conditionClause()} GROUP BY category`,
+      WHERE ${VISIBLE}${await conditionClause()} GROUP BY category`,
   );
   return new Map(rows.map((r) => [r.category, r.count]));
 }
@@ -496,9 +511,9 @@ export interface LiveVariant {
   is_visible: number;
 }
 
-export function getVariantsBySku(skus: string[]): Map<string, LiveVariant> {
+export async function getVariantsBySku(skus: string[]): Promise<Map<string, LiveVariant>> {
   if (skus.length === 0) return new Map();
-  const rows = all<LiveVariant>(
+  const rows = await all<LiveVariant>(
     `SELECT v.sku, v.size, v.quantity,
             p.article_number, p.brand, p.style_name, p.colour,
             p.price_wholesale, p.case_pack, p.moq, p.category, p.is_visible
@@ -518,18 +533,18 @@ export function getVariantsBySku(skus: string[]): Map<string, LiveVariant> {
  * same visibility rules as the catalogue, so the number on the home page and
  * the number of things you can actually order never disagree.
  */
-export function getCatalogueTotals(): {
+export async function getCatalogueTotals(): Promise<{
   units: number;
   articles: number;
   sizes: number;
-} {
-  const row = get<{ units: number; articles: number; sizes: number }>(
+}> {
+  const row = await get<{ units: number; articles: number; sizes: number }>(
     `SELECT COALESCE(SUM(v.quantity), 0) AS units,
             COUNT(DISTINCT p.id)         AS articles,
             COUNT(v.id)                  AS sizes
        FROM products p
        LEFT JOIN variants v ON v.product_id = p.id
-      WHERE ${VISIBLE}${conditionClause()}`,
+      WHERE ${VISIBLE}${await conditionClause()}`,
   );
   return {
     units: row?.units ?? 0,
@@ -538,7 +553,7 @@ export function getCatalogueTotals(): {
   };
 }
 
-export function getStockAsAt(): string | null {
-  const value = getSetting("last_import_at");
+export async function getStockAsAt(): Promise<string | null> {
+  const value = await getSetting("last_import_at");
   return value || null;
 }

@@ -8,8 +8,8 @@ export const metadata: Metadata = {
     "The golf brands Pin High holds in stock in Dubai for UAE corporate customers.",
 };
 
-export default function BrandsPage() {
-  const brands = listBrands();
+export default async function BrandsPage() {
+  const brands = await listBrands();
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 py-12">

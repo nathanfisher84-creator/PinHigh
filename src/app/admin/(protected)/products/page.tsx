@@ -63,7 +63,7 @@ export default async function AdminProductsPage({
   }
   if (hidden) clauses.push("p.is_visible = 0");
 
-  const products = all<AdminProductRow>(
+  const products = await all<AdminProductRow>(
     `SELECT p.*,
             COALESCE((SELECT SUM(quantity) FROM variants v WHERE v.product_id = p.id), 0)
               AS total_quantity,
@@ -77,7 +77,7 @@ export default async function AdminProductsPage({
 
   // One query for every image, grouped in memory. The catalogue is a few
   // hundred styles (§15.1), so this is cheaper than a query per row.
-  const imageRows = all<ProductImageRow>(
+  const imageRows = await all<ProductImageRow>(
     "SELECT * FROM product_images ORDER BY is_primary DESC, sort_order ASC",
   );
   const imagesByProduct: Record<string, ProductImageRow[]> = {};

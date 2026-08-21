@@ -30,16 +30,16 @@ export default async function QuoteConfirmationPage({ params }: { params: Params
   // Reject anything that is not reference-shaped before touching the database.
   if (!REFERENCE_PATTERN.test(reference)) notFound();
 
-  const quote = getQuoteByReference(reference);
+  const quote = await getQuoteByReference(reference);
   if (!quote) notFound();
 
-  const settings = getSettings();
+  const settings = await getSettings();
   const responseHours = Number(settings.quote_response_hours) || 24;
 
   // Did the buyer's own copy actually leave? Used below so the page never
   // promises an email that was skipped because the channel isn't connected.
   const buyerCopySent = quote.notified_email.some(
-    (entry) => entry.recipient === quote.email && entry.status === "sent",
+    async (entry) => entry.recipient === quote.email && entry.status === "sent",
   );
 
   return (

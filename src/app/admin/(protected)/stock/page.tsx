@@ -30,13 +30,13 @@ export default async function AdminStockPage({
   const search = params.q?.trim() ?? "";
   const filter = params.filter === "low" || params.filter === "empty" ? params.filter : "";
 
-  const counts = getStockCounts();
-  const articles = listStock({
+  const counts = await getStockCounts();
+  const articles = await listStock({
     search,
     lowOnly: filter === "low",
     emptyOnly: filter === "empty",
   });
-  const stockDate = getStockAsAt();
+  const stockDate = await getStockAsAt();
 
   const filterLink = (value: string, label: string, count?: number) => {
     const active = filter === value;
@@ -68,8 +68,8 @@ export default async function AdminStockPage({
         <h1 className="text-2xl">Stock</h1>
         <p className="tabular text-sm text-graphite-ink">
           {counts.units} units across {counts.articles} articles · last upload{" "}
-          {relativeTime(stockDate)}
-          {stockDate && ` · ${formatDateTime(stockDate)}`}
+          {(await relativeTime(stockDate))}
+          {stockDate && ` · ${(await formatDateTime(stockDate))}`}
         </p>
       </div>
 

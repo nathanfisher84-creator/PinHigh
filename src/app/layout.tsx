@@ -34,12 +34,12 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Read once here and pass down, so the header search and the announcement
   // bar do not each open their own query on every navigation.
-  const facets = getFacets();
-  const announcement = getSetting("announcement");
-  const stockDate = getStockAsAt();
+  const facets = await getFacets();
+  const announcement = await getSetting("announcement");
+  const stockDate = await getStockAsAt();
 
   return (
     <html lang="en-AE">

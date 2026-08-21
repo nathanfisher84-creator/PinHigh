@@ -12,13 +12,13 @@ type Params = Promise<{ id: string }>;
 
 export async function generateMetadata({ params }: { params: Params }) {
   const { id } = await params;
-  const quote = getQuoteById(id);
+  const quote = await getQuoteById(id);
   return { title: quote ? quote.reference : "Quote request" };
 }
 
 export default async function AdminQuoteDetail({ params }: { params: Params }) {
   const { id } = await params;
-  const quote = getQuoteById(id);
+  const quote = await getQuoteById(id);
   if (!quote) notFound();
 
   const flagged = quote.lines.filter((l) => l.stock_flag);

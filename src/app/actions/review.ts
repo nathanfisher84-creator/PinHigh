@@ -40,7 +40,7 @@ export async function reviewCart(
   lines: { sku: string; quantity: number }[],
 ): Promise<ReviewState> {
   const skus = lines.map((l) => l.sku).filter(Boolean).slice(0, 500);
-  const live = getVariantsBySku(skus);
+  const live = await getVariantsBySku(skus);
 
   const categories = new Set<string>();
   const states: ReviewLineState[] = [];
@@ -87,14 +87,14 @@ export async function reviewCart(
 
   const placementsByCategory: Record<string, string[]> = {};
   for (const category of categories) {
-    placementsByCategory[category] = getBrandingPlacements(category);
+    placementsByCategory[category] = await getBrandingPlacements(category);
   }
 
   return {
     lines: states,
     placementsByCategory,
-    stockAsAt: getStockAsAt(),
-    brandingMinUnits: Number(getSetting("branding_min_units")) || 12,
-    responseHours: Number(getSetting("quote_response_hours")) || 24,
+    stockAsAt: await getStockAsAt(),
+    brandingMinUnits: Number(await getSetting("branding_min_units")) || 12,
+    responseHours: Number(await getSetting("quote_response_hours")) || 24,
   };
 }

@@ -67,8 +67,8 @@ interface ExistingVariant {
   is_visible: number;
 }
 
-function loadExisting(): Map<string, ExistingVariant> {
-  const rows = all<ExistingVariant>(
+async function loadExisting(): Promise<Map<string, ExistingVariant>> {
+  const rows = await all<ExistingVariant>(
     `SELECT v.sku, v.quantity, v.product_id, v.size,
             p.article_number, p.brand, p.style_name, p.colour, p.is_visible
        FROM variants v JOIN products p ON p.id = v.product_id`,
@@ -80,16 +80,16 @@ function loadExisting(): Map<string, ExistingVariant> {
    Diff
    ---------------------------------------------------------------------- */
 
-export function buildDiff(
+export async function buildDiff(
   rows: ParsedRow[],
   mode: ImportMode,
   issues: RowIssue[],
   rowsRead: number,
   rowsFailed: number,
-): StockDiff {
-  const existing = loadExisting();
+): Promise<StockDiff> {
+  const existing = await loadExisting();
   const existingArticles = new Set(
-    all<{ article_number: string }>("SELECT article_number FROM products").map(
+    (await all<{ article_number: string }>("SELECT article_number FROM products")).map(
       (r) => r.article_number,
     ),
   );
@@ -221,11 +221,11 @@ interface Snapshot {
   variants: Record<string, unknown>[];
 }
 
-function takeSnapshot(): Snapshot {
+async function takeSnapshot(): Promise<Snapshot> {
   return {
     takenAt: now(),
-    products: all("SELECT * FROM products"),
-    variants: all("SELECT * FROM variants"),
+    products: await all("SELECT * FROM products"),
+    variants: await all("SELECT * FROM variants"),
   };
 }
 
@@ -245,7 +245,7 @@ export interface CommitResult {
  * a half-applied stock file is the worst outcome available, because it looks
  * like it succeeded.
  */
-export function commitImport(
+export async function commitImport(
   rows: ParsedRow[],
   mode: ImportMode,
   diff: StockDiff,
@@ -259,16 +259,16 @@ export function commitImport(
     /** adidas sales orders covered by this import. */
     orderRefs?: string[];
   },
-): CommitResult {
+): Promise<CommitResult> {
   const importId = uid();
   const timestamp = now();
-  const snapshot = takeSnapshot();
+  const snapshot = await takeSnapshot();
 
   let rowsCreated = 0;
   let rowsUpdated = 0;
   let rowsZeroed = 0;
 
-  transaction(() => {
+  await transaction(async () => {
     // Group rows by article so each product is touched once.
     const byArticle = new Map<string, ParsedRow[]>();
     for (const row of rows) {
@@ -278,13 +278,13 @@ export function commitImport(
     }
 
     let sortCursor =
-      (get<{ max: number }>("SELECT COALESCE(MAX(sort_order), 0) AS max FROM products")
+      ((await get<{ max: number }>("SELECT COALESCE(MAX(sort_order), 0) AS max FROM products"))
         ?.max ?? 0) + 1;
 
     for (const [articleNumber, articleRows] of byArticle) {
       const lead = articleRows[0];
 
-      const existingProduct = get<{ id: string; price_wholesale: number | null; rrp: number | null }>(
+      const existingProduct = await get<{ id: string; price_wholesale: number | null; rrp: number | null }>(
         "SELECT id, price_wholesale, rrp FROM products WHERE article_number = ?",
         articleNumber,
       );
@@ -298,7 +298,7 @@ export function commitImport(
 
       if (existingProduct) {
         productId = existingProduct.id;
-        run(
+        await run(
           /*
            * An invoice re-import must never overwrite the name, colour,
            * category or gender the owner typed in — the file does not contain
@@ -345,7 +345,7 @@ export function commitImport(
         );
       } else {
         productId = uid();
-        run(
+        await run(
           `INSERT INTO products (
              id, article_number, brand, style_group, style_name, condition, colour,
              colour_hex, category, gender, description, fabric, season,
@@ -386,7 +386,7 @@ export function commitImport(
       }
 
       for (const row of articleRows) {
-        const existingVariant = get<{ id: string }>(
+        const existingVariant = await get<{ id: string }>(
           "SELECT id FROM variants WHERE sku = ?",
           row.sku,
         );
@@ -397,7 +397,7 @@ export function commitImport(
            * the only thing that knows what is actually on the shelf.
            */
           if (mode === "details") {
-            run(
+            await run(
               `UPDATE variants SET product_id = ?, size = ?, size_order = ?, updated_at = ?
                 WHERE id = ?`,
               productId,
@@ -407,7 +407,7 @@ export function commitImport(
               existingVariant.id,
             );
           } else {
-            run(
+            await run(
               mode === "add"
                 ? `UPDATE variants SET product_id = ?, size = ?, size_order = ?,
                      quantity = quantity + ?, updated_at = ? WHERE id = ?`
@@ -423,7 +423,7 @@ export function commitImport(
           }
           rowsUpdated++;
         } else {
-          run(
+          await run(
             `INSERT INTO variants (id, product_id, sku, size, size_order, quantity, updated_at)
              VALUES (?,?,?,?,?,?,?)`,
             uid(),
@@ -445,7 +445,7 @@ export function commitImport(
     // it drops out of the catalogue without losing its history.
     if (mode !== "add" && mode !== "set" && mode !== "details") {
       for (const absent of diff.absent) {
-        run(
+        await run(
           "UPDATE variants SET quantity = 0, updated_at = ? WHERE sku = ?",
           timestamp,
           absent.sku,
@@ -460,7 +460,7 @@ export function commitImport(
       for (const articleNumber of absentArticles) {
         // Only hide an article if none of its sizes appear in the file at all.
         if (presentArticles.has(articleNumber)) continue;
-        run(
+        await run(
           "UPDATE products SET is_visible = 0, updated_at = ? WHERE article_number = ?",
           timestamp,
           articleNumber,
@@ -468,7 +468,7 @@ export function commitImport(
       }
     }
 
-    run(
+    await run(
       `INSERT INTO stock_imports (
          id, filename, storage_path, uploaded_by, mode,
          rows_total, rows_created, rows_updated, rows_zeroed, rows_failed,
@@ -495,8 +495,8 @@ export function commitImport(
 
   // Stock is presented with the date it came from (§7.1), so this is the value
   // every "Stock as at" label on the site reads.
-  setSetting("last_import_at", timestamp);
-  audit("stock.import", importId, {
+  await setSetting("last_import_at", timestamp);
+  await audit("stock.import", importId, {
     filename: meta.filename,
     mode,
     rowsCreated,
@@ -519,8 +519,8 @@ export function canRollback(importRow: { created_at: string; status: string }): 
   return age <= ROLLBACK_WINDOW_DAYS * 86_400_000;
 }
 
-export function rollbackImport(importId: string): { restored: number } {
-  const row = get<{ id: string; snapshot_before: string; created_at: string; status: string }>(
+export async function rollbackImport(importId: string): Promise<{ restored: number }> {
+  const row = await get<{ id: string; snapshot_before: string; created_at: string; status: string }>(
     "SELECT id, snapshot_before, created_at, status FROM stock_imports WHERE id = ?",
     importId,
   );
@@ -536,13 +536,13 @@ export function rollbackImport(importId: string): { restored: number } {
   const snapshot = JSON.parse(row.snapshot_before) as Snapshot;
   let restored = 0;
 
-  transaction(() => {
+  await transaction(async () => {
     // Restore rather than replace: products created since the import are left
     // alone if they are unrelated, but anything the import touched goes back to
     // exactly the state it was in.
     for (const p of snapshot.products) {
       const keys = Object.keys(p);
-      run(
+      await run(
         `INSERT INTO products (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})
          ON CONFLICT(id) DO UPDATE SET ${keys
            .filter((k) => k !== "id")
@@ -554,7 +554,7 @@ export function rollbackImport(importId: string): { restored: number } {
 
     for (const v of snapshot.variants) {
       const keys = Object.keys(v);
-      run(
+      await run(
         `INSERT INTO variants (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})
          ON CONFLICT(id) DO UPDATE SET ${keys
            .filter((k) => k !== "id")
@@ -568,31 +568,31 @@ export function rollbackImport(importId: string): { restored: number } {
     // Anything the import created did not exist in the snapshot. Zero and hide
     // it rather than deleting — the same rule as everywhere else (§4.3).
     const snapshotVariantIds = new Set(snapshot.variants.map((v) => String(v.id)));
-    const currentVariants = all<{ id: string }>("SELECT id FROM variants");
+    const currentVariants = await all<{ id: string }>("SELECT id FROM variants");
     for (const cv of currentVariants) {
       if (!snapshotVariantIds.has(cv.id)) {
-        run("UPDATE variants SET quantity = 0, updated_at = ? WHERE id = ?", now(), cv.id);
+        await run("UPDATE variants SET quantity = 0, updated_at = ? WHERE id = ?", now(), cv.id);
       }
     }
     const snapshotProductIds = new Set(snapshot.products.map((p) => String(p.id)));
-    const currentProducts = all<{ id: string }>("SELECT id FROM products");
+    const currentProducts = await all<{ id: string }>("SELECT id FROM products");
     for (const cp of currentProducts) {
       if (!snapshotProductIds.has(cp.id)) {
-        run("UPDATE products SET is_visible = 0, updated_at = ? WHERE id = ?", now(), cp.id);
+        await run("UPDATE products SET is_visible = 0, updated_at = ? WHERE id = ?", now(), cp.id);
       }
     }
 
-    run("UPDATE stock_imports SET status = 'rolled_back' WHERE id = ?", importId);
+    await run("UPDATE stock_imports SET status = 'rolled_back' WHERE id = ?", importId);
   });
 
-  setSetting("last_import_at", snapshot.takenAt);
-  audit("stock.rollback", importId, { restored });
+  await setSetting("last_import_at", snapshot.takenAt);
+  await audit("stock.rollback", importId, { restored });
 
   return { restored };
 }
 
-export function listImports(limit = 50) {
-  return all<{
+export async function listImports(limit = 50) {
+  return await all<{
     id: string;
     filename: string;
     mode: ImportMode;

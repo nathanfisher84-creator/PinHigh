@@ -8,8 +8,8 @@ export const metadata: Metadata = {
     "Talk to the Pin High corporate team in Dubai about golf days, tournaments, gifting and staff kit.",
 };
 
-export default function ContactPage() {
-  const settings = getSettings();
+export default async function ContactPage() {
+  const settings = await getSettings();
 
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 py-12">

@@ -14,9 +14,9 @@ export const metadata = { title: "Stock uploads" };
  * the invoice for quantities. Manual size-by-size corrections live one tab
  * over, on /admin/stock.
  */
-export default function StockUploadsPage() {
-  const imports = listImports(50);
-  const stockDate = getStockAsAt();
+export default async function StockUploadsPage() {
+  const imports = await listImports(50);
+  const stockDate = await getStockAsAt();
 
   const history = imports.map((i) => ({
     ...i,
@@ -28,8 +28,8 @@ export default function StockUploadsPage() {
       <div className="flex flex-wrap items-baseline justify-between gap-4">
         <h1 className="text-2xl">Stock</h1>
         <p className="tabular text-sm text-graphite-ink">
-          Last upload {relativeTime(stockDate)}
-          {stockDate && ` · ${formatDateTime(stockDate)}`}
+          Last upload {(await relativeTime(stockDate))}
+          {stockDate && ` · ${(await formatDateTime(stockDate))}`}
         </p>
       </div>
 

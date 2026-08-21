@@ -14,63 +14,64 @@ import { ensureSeeded } from "./seed";
  * imports this file, so there is no cycle to reason about at module-eval time.
  */
 
-let ready = false;
+let readyPromise: Promise<void> | undefined;
 
-function ensureReady(): void {
-  if (ready) return;
-  // Set first: ensureSeeded runs queries of its own, and those must not
-  // re-enter this guard.
-  ready = true;
-  core.getDb();
-  ensureSeeded();
+function ensureReady(): Promise<void> {
+  // Memoised: ensureSeeded runs queries of its own through db/core directly,
+  // so nothing here re-enters this guard.
+  readyPromise ??= core.ready().then(() => ensureSeeded());
+  return readyPromise;
 }
 
-export function all<T = Record<string, unknown>>(sql: string, ...params: unknown[]): T[] {
-  ensureReady();
+export async function all<T = Record<string, unknown>>(
+  sql: string,
+  ...params: unknown[]
+): Promise<T[]> {
+  await ensureReady();
   return core.all<T>(sql, ...params);
 }
 
-export function get<T = Record<string, unknown>>(
+export async function get<T = Record<string, unknown>>(
   sql: string,
   ...params: unknown[]
-): T | undefined {
-  ensureReady();
+): Promise<T | undefined> {
+  await ensureReady();
   return core.get<T>(sql, ...params);
 }
 
-export function run(sql: string, ...params: unknown[]) {
-  ensureReady();
+export async function run(sql: string, ...params: unknown[]): Promise<{ changes: number }> {
+  await ensureReady();
   return core.run(sql, ...params);
 }
 
-export function transaction<T>(fn: () => T): T {
-  ensureReady();
+export async function transaction<T>(fn: () => Promise<T>): Promise<T> {
+  await ensureReady();
   return core.transaction(fn);
 }
 
-export function getDb() {
-  ensureReady();
-  return core.getDb();
-}
-
-export function getSetting(key: string): string {
-  ensureReady();
+export async function getSetting(key: string): Promise<string> {
+  await ensureReady();
   return core.getSetting(key);
 }
 
-export function getSettings(): Record<string, string> {
-  ensureReady();
+export async function getSettings(): Promise<Record<string, string>> {
+  await ensureReady();
   return core.getSettings();
 }
 
-export function setSetting(key: string, value: string): void {
-  ensureReady();
-  core.setSetting(key, value);
+export async function setSetting(key: string, value: string): Promise<void> {
+  await ensureReady();
+  return core.setSetting(key, value);
 }
 
-export function audit(action: string, subject?: string, detail?: unknown, actor?: string) {
-  ensureReady();
-  core.audit(action, subject, detail, actor);
+export async function audit(
+  action: string,
+  subject?: string,
+  detail?: unknown,
+  actor?: string,
+): Promise<void> {
+  await ensureReady();
+  return core.audit(action, subject, detail, actor);
 }
 
 export { uid, now, SETTING_DEFAULTS } from "./core";

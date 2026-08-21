@@ -23,14 +23,14 @@ function toArray(v: string | string[] | undefined): string[] | undefined {
   return Array.isArray(v) ? v : [v];
 }
 
-function resolveBrand(slug: string): string | null {
+async function resolveBrand(slug: string): Promise<string | null> {
   const target = decodeURIComponent(slug).toLowerCase();
-  return listBrands().find((b) => b.value.toLowerCase() === target)?.value ?? null;
+  return (await listBrands()).find((b) => b.value.toLowerCase() === target)?.value ?? null;
 }
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { brand } = await params;
-  const resolved = resolveBrand(brand);
+  const resolved = await resolveBrand(brand);
   if (!resolved) return { title: "Brand not found" };
   return {
     title: `${resolved} golf kit for UAE companies`,
@@ -47,12 +47,12 @@ export default async function BrandPage({
   searchParams: SearchParams;
 }) {
   const { brand } = await params;
-  const resolved = resolveBrand(brand);
+  const resolved = await resolveBrand(brand);
   if (!resolved) notFound();
 
   const query = await searchParams;
-  const facets = getFacets();
-  const cards = listCatalogue({
+  const facets = await getFacets();
+  const cards = await listCatalogue({
     brand: [resolved],
     category: toArray(query.category),
     gender: toArray(query.gender),

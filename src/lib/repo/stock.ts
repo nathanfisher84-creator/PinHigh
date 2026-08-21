@@ -61,7 +61,7 @@ export interface StockFilters {
   emptyOnly?: boolean;
 }
 
-export function listStock(filters: StockFilters = {}): StockArticle[] {
+export async function listStock(filters: StockFilters = {}): Promise<StockArticle[]> {
   const clauses: string[] = ["1=1"];
   const params: unknown[] = [];
 
@@ -74,7 +74,7 @@ export function listStock(filters: StockFilters = {}): StockArticle[] {
     params.push(q, q, q, q);
   }
 
-  const products = all<{
+  const products = await all<{
     id: string;
     article_number: string;
     brand: string;
@@ -97,7 +97,7 @@ export function listStock(filters: StockFilters = {}): StockArticle[] {
 
   // One query for every size, grouped in memory. A few hundred articles (§15.1)
   // is far cheaper this way than a query per row.
-  const variants = all<StockSize & { product_id: string }>(
+  const variants = await all<StockSize & { product_id: string }>(
     `SELECT id AS variant_id, product_id, sku, size, size_order, quantity
        FROM variants ORDER BY size_order ASC`,
   );
@@ -136,8 +136,8 @@ export interface StockCounts {
   noImage: number;
 }
 
-export function getStockCounts(): StockCounts {
-  const row = get<StockCounts>(
+export async function getStockCounts(): Promise<StockCounts> {
+  const row = await get<StockCounts>(
     `SELECT
        (SELECT COUNT(*) FROM products) AS articles,
        (SELECT COALESCE(SUM(quantity), 0) FROM variants) AS units,
@@ -185,12 +185,12 @@ export interface AdjustmentResult {
  * Only quantities that actually moved are written, so saving a grid nobody
  * edited does not fill the ledger with no-op rows.
  */
-export function adjustStock(
+export async function adjustStock(
   changes: AdjustmentInput[],
   reason: string,
   note: string | null,
   actor: string,
-): AdjustmentResult {
+): Promise<AdjustmentResult> {
   if (!VALID_REASONS.has(reason)) {
     return { changed: 0, unchanged: 0, errors: ["Choose a reason for the change."] };
   }
@@ -200,7 +200,7 @@ export function adjustStock(
   let unchanged = 0;
   const timestamp = now();
 
-  transaction(() => {
+  await transaction(async () => {
     for (const change of changes) {
       const raw = Number(change.quantity);
       if (!Number.isFinite(raw)) {
@@ -209,7 +209,7 @@ export function adjustStock(
       }
       const quantity = Math.max(0, Math.floor(raw));
 
-      const variant = get<{
+      const variant = await get<{
         id: string;
         sku: string;
         size: string;
@@ -232,14 +232,14 @@ export function adjustStock(
         continue;
       }
 
-      run(
+      await run(
         "UPDATE variants SET quantity = ?, updated_at = ? WHERE id = ?",
         quantity,
         timestamp,
         variant.id,
       );
 
-      run(
+      await run(
         `INSERT INTO stock_adjustments (
            id, sku, article_number, size, quantity_before, quantity_after,
            delta, reason, note, actor, created_at
@@ -262,7 +262,7 @@ export function adjustStock(
   });
 
   if (changed > 0) {
-    audit("stock.adjust", reason, { changed, note }, actor);
+    await audit("stock.adjust", reason, { changed, note }, actor);
   }
 
   return { changed, unchanged, errors };
@@ -282,16 +282,16 @@ export interface AdjustmentRow {
   created_at: string;
 }
 
-export function listAdjustments(limit = 200, articleNumber?: string): AdjustmentRow[] {
+export async function listAdjustments(limit = 200, articleNumber?: string): Promise<AdjustmentRow[]> {
   if (articleNumber) {
-    return all<AdjustmentRow>(
+    return await all<AdjustmentRow>(
       `SELECT * FROM stock_adjustments WHERE article_number = ?
         ORDER BY created_at DESC LIMIT ?`,
       articleNumber,
       limit,
     );
   }
-  return all<AdjustmentRow>(
+  return await all<AdjustmentRow>(
     "SELECT * FROM stock_adjustments ORDER BY created_at DESC LIMIT ?",
     limit,
   );

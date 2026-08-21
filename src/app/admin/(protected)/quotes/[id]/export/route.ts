@@ -13,10 +13,10 @@ export async function GET(
   }
 
   const { id } = await params;
-  const quote = getQuoteById(id);
+  const quote = await getQuoteById(id);
   if (!quote) return new NextResponse("Not found.", { status: 404 });
 
-  return new NextResponse(quoteLinesCsv(quote), {
+  return new NextResponse((await quoteLinesCsv(quote)), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${quote.reference}-lines.csv"`,

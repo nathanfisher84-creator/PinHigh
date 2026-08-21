@@ -17,8 +17,8 @@ export const metadata: Metadata = {
  *
  * NOT LEGAL ADVICE. Review before cutover.
  */
-export default function TermsPage() {
-  const settings = getSettings();
+export default async function TermsPage() {
+  const settings = await getSettings();
   const email = settings.contact_email || "sales@pinhighuae.com";
 
   return (

@@ -25,8 +25,8 @@ export interface Recipient {
   value: string;
 }
 
-function activeRecipients(channel: "email" | "whatsapp"): Recipient[] {
-  return all<Recipient>(
+async function activeRecipients(channel: "email" | "whatsapp"): Promise<Recipient[]> {
+  return await all<Recipient>(
     `SELECT id, name, channel, value FROM notification_recipients
       WHERE channel = ? AND is_active = 1`,
     channel,
@@ -75,7 +75,7 @@ export async function dispatchQuoteNotifications(
   );
 
   /* -- Email: the system of record (§7.3) ------------------------------- */
-  for (const recipient of activeRecipients("email")) {
+  for (const recipient of (await activeRecipients("email"))) {
     if (!emailConfigured) {
       emailLog.push({
         recipient: recipient.value,
@@ -92,7 +92,7 @@ export async function dispatchQuoteNotifications(
   }
 
   /* -- WhatsApp ---------------------------------------------------------- */
-  for (const recipient of activeRecipients("whatsapp")) {
+  for (const recipient of (await activeRecipients("whatsapp"))) {
     if (!whatsappConfigured) {
       whatsappLog.push({
         recipient: recipient.value,

@@ -1,18 +1,13 @@
 /**
  * Where this instance is running, and what that means for the data it holds.
  *
- * The application stores everything in a SQLite file (see `lib/db/core.ts`).
- * That is fine on a normal server and fine locally, but Vercel's serverless
- * filesystem is read-only apart from `/tmp`, and `/tmp` is per-instance and
- * discarded when the instance recycles.
- *
- * So on Vercel the catalogue works perfectly — it is re-seeded from the bundled
- * stock file on cold start — but anything *written* (a quote request, a stock
- * import, an uploaded logo) lives only as long as that one instance. The site
- * must say so rather than silently losing a buyer's enquiry.
- *
- * Setting up Supabase (spec §2) is what makes this go away, and
- * `isEphemeralStore()` returns false as soon as it is configured.
+ * With DATABASE_URL set (Supabase Postgres, spec §2), everything persists and
+ * none of this matters. Without it the application falls back to an embedded
+ * in-memory database that reseeds per process (see `lib/db/core.ts`) — fine
+ * for development, but on Vercel it means anything *written* (a quote
+ * request, a stock import, an uploaded logo) lives only as long as one
+ * instance. The site must say so rather than silently losing a buyer's
+ * enquiry, which is what `isEphemeralStore()` drives.
  */
 
 export function isVercel(): boolean {
@@ -22,7 +17,7 @@ export function isVercel(): boolean {
 /** True when writes will not survive. Drives the notice in the layout. */
 export function isEphemeralStore(): boolean {
   const hasDurableStore = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.PINHIGH_DURABLE_STORE,
+    process.env.DATABASE_URL || process.env.PINHIGH_DURABLE_STORE,
   );
   return isVercel() && !hasDurableStore;
 }

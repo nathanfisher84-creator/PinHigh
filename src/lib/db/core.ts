@@ -1,96 +1,261 @@
 import "server-only";
-import { DatabaseSync } from "node:sqlite";
-import { mkdirSync, existsSync } from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import { SCHEMA_SQL } from "./schema";
 
 /**
  * The single seam between the application and its store.
  *
- * Everything above this file talks in domain types and never sees SQL. Spec §2
- * specifies Supabase Postgres; swapping to it means reimplementing the query
- * helpers below against `@supabase/supabase-js` and pointing the repositories
- * at them — nothing in the components, actions or importer changes.
+ * Everything above this file talks in domain types and never sees a driver.
+ * The store is Postgres either way:
  *
- * SQLite is used here because it runs with no credentials, which keeps the
- * catalogue, importer and quote flow demonstrable end to end today.
+ *   - `DATABASE_URL` set (Supabase's transaction pooler in production): the
+ *     `pg` driver against the real database. This is what makes admin work
+ *     persist on Vercel, where the filesystem is wiped on every cold start.
+ *   - no `DATABASE_URL`: an embedded PGlite database persisted under `.data/`
+ *     (or `/tmp` on Vercel), so the whole application still runs end to end
+ *     with no credentials — same dialect, same SQL, zero setup.
+ *
+ * Queries are written with `?` placeholders and converted to `$1…$n` here,
+ * which kept the entire repository layer unchanged through the SQLite →
+ * Postgres migration.
  */
 
-/**
- * Where the database file lives.
- *
- * On Vercel the deployment bundle is read-only and `/tmp` is the only writable
- * path, so the store goes there and is re-seeded per instance. See
- * `lib/runtime.ts` for what that costs and how the site declares it.
- */
 const DATA_DIR =
   process.env.PINHIGH_DATA_DIR ??
   (process.env.VERCEL ? "/tmp/pinhigh" : path.join(process.cwd(), ".data"));
 
-const DB_PATH = path.join(DATA_DIR, "pinhigh.db");
+/** One row shape for both drivers. */
+interface QueryResult {
+  rows: Record<string, unknown>[];
+  rowCount: number;
+}
+
+interface Driver {
+  query(text: string, params: unknown[]): Promise<QueryResult>;
+  /** Multi-statement DDL. */
+  exec(text: string): Promise<void>;
+  /** Run fn with every query pinned to one connection, inside BEGIN/COMMIT. */
+  withTransaction<T>(fn: () => Promise<T>): Promise<T>;
+}
 
 declare global {
   // eslint-disable-next-line no-var
-  var __pinhighDb: DatabaseSync | undefined;
+  var __pinhighDriver: Promise<Driver> | undefined;
+  // eslint-disable-next-line no-var
+  var __pinhighReady: Promise<void> | undefined;
   // eslint-disable-next-line no-var
   var __pinhighSeeded: boolean | undefined;
 }
 
-function open(): DatabaseSync {
-  if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-  const db = new DatabaseSync(DB_PATH);
+/* -------------------------------------------------------------------------
+   pg driver (Supabase / any Postgres)
+   ---------------------------------------------------------------------- */
 
-  /*
-   * Set the busy timeout before anything else touches the file.
-   *
-   * More than one process opens this database at once — `next build` fans out
-   * across worker processes to prerender pages, and a server runs alongside
-   * the dev server in normal use. Without a timeout, any write that meets a
-   * held lock fails immediately with SQLITE_BUSY rather than waiting, which
-   * showed up as "database is locked" killing the build during sitemap
-   * generation. Five seconds is far longer than any write here takes.
-   */
-  db.exec("PRAGMA busy_timeout = 5000");
+async function openPg(url: string): Promise<Driver> {
+  const { Pool, types } = await import("pg");
 
-  db.exec(SCHEMA_SQL);
+  // int8 (COUNT, SUM of integers) and numeric otherwise arrive as strings —
+  // every repository compares and adds them as numbers.
+  types.setTypeParser(20, (v: string) => Number(v));
+  types.setTypeParser(1700, (v: string) => Number(v));
 
-  /*
-   * Columns added after the first release. CREATE TABLE IF NOT EXISTS will not
-   * add them to a database that already exists, so they are applied here and
-   * the duplicate-column error is the expected no-op on an up-to-date file.
-   */
-  for (const alter of [
-    "ALTER TABLE products ADD COLUMN cost_price REAL",
-    "ALTER TABLE products ADD COLUMN needs_review INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE stock_imports ADD COLUMN invoice_refs TEXT",
-    "ALTER TABLE stock_imports ADD COLUMN order_refs TEXT",
-  ]) {
-    try {
-      db.exec(alter);
-    } catch {
-      /* already present */
-    }
-  }
+  const pool = new Pool({
+    connectionString: url,
+    // Serverless: many short-lived instances, each holding few connections.
+    // Supabase's transaction pooler multiplexes the rest.
+    max: 3,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
+    ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false },
+  });
 
-  return db;
+  const als = new AsyncLocalStorage<import("pg").PoolClient>();
+
+  return {
+    async query(text, params) {
+      const client = als.getStore();
+      const res = client
+        ? await client.query(text, params)
+        : await pool.query(text, params);
+      return { rows: res.rows, rowCount: res.rowCount ?? 0 };
+    },
+    async exec(text) {
+      await pool.query(text);
+    },
+    async withTransaction(fn) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await als.run(client, fn);
+        await client.query("COMMIT");
+        return result;
+      } catch (err) {
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          /* the original error is the one worth surfacing */
+        }
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
+  };
 }
 
-/** Cached on globalThis so dev-server hot reloads do not open a handle per edit. */
-export function getDb(): DatabaseSync {
-  if (!globalThis.__pinhighDb) {
-    globalThis.__pinhighDb = open();
+/* -------------------------------------------------------------------------
+   PGlite driver (embedded fallback — no credentials required)
+   ---------------------------------------------------------------------- */
+
+async function openPglite(): Promise<Driver> {
+  const { PGlite } = await import("@electric-sql/pglite");
+  // In-memory, always: PGlite is a single-process database, and file storage
+  // deadlocks the moment `next build` fans out across workers that all open
+  // the same directory. Every process seeds its own copy instead (the seed is
+  // idempotent and fast); real persistence is DATABASE_URL's job.
+  const db = new PGlite({
+    // Match the pg driver: int8 and numeric arrive as numbers, not strings
+    // or BigInts, because every repository does arithmetic on them.
+    parsers: {
+      20: (v: string) => Number(v),
+      1700: (v: string) => Number(v),
+    },
+  });
+  await db.waitReady;
+
+  // PGlite is a single session, so statements outside a transaction are
+  // serialised one at a time. Statements *inside* a transaction must bypass
+  // the queue — the transaction wrapper holds the queue's head, and a query
+  // that re-entered it would wait on the very transaction waiting on it.
+  const inTransaction = new AsyncLocalStorage<boolean>();
+  let chain = Promise.resolve() as Promise<unknown>;
+  const serialise = <T>(fn: () => Promise<T>): Promise<T> => {
+    if (inTransaction.getStore()) return fn();
+    const next = chain.then(fn, fn);
+    chain = next.catch(() => undefined);
+    return next;
+  };
+
+  return {
+    query: (text, params) =>
+      serialise(async () => {
+        const res = await db.query<Record<string, unknown>>(text, params as never[]);
+        return { rows: res.rows, rowCount: res.affectedRows ?? res.rows.length };
+      }),
+    exec: (text) =>
+      serialise(async () => {
+        await db.exec(text);
+      }),
+    withTransaction: (fn) =>
+      serialise(() =>
+        inTransaction.run(true, async () => {
+          await db.exec("BEGIN");
+          try {
+            const result = await fn();
+            await db.exec("COMMIT");
+            return result;
+          } catch (err) {
+            try {
+              await db.exec("ROLLBACK");
+            } catch {
+              /* surface the original error */
+            }
+            throw err;
+          }
+        }),
+      ),
+  };
+}
+
+/* -------------------------------------------------------------------------
+   Boot
+   ---------------------------------------------------------------------- */
+
+async function migrate(driver: Driver): Promise<void> {
+  // Several processes can boot at once (next build prerenders in parallel
+  // workers). The advisory lock makes exactly one run the DDL while the
+  // others wait for it to finish.
+  const usingPg = Boolean(process.env.DATABASE_URL);
+  if (usingPg) await driver.query("SELECT pg_advisory_lock(727272)", []);
+  try {
+    await driver.exec(SCHEMA_SQL);
+    // Columns added after the first release. Postgres has IF NOT EXISTS for
+    // this, so no error-swallowing is needed.
+    await driver.exec(`
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS cost_price REAL;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS needs_review INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE stock_imports ADD COLUMN IF NOT EXISTS invoice_refs TEXT;
+      ALTER TABLE stock_imports ADD COLUMN IF NOT EXISTS order_refs TEXT;
+    `);
+  } finally {
+    if (usingPg) await driver.query("SELECT pg_advisory_unlock(727272)", []);
   }
-  return globalThis.__pinhighDb;
+}
+
+function getDriver(): Promise<Driver> {
+  if (!globalThis.__pinhighDriver) {
+    const url = process.env.DATABASE_URL;
+    globalThis.__pinhighDriver = url ? openPg(url) : openPglite();
+  }
+  return globalThis.__pinhighDriver;
+}
+
+/** Resolves once the schema exists. Memoised for the life of the process. */
+export function ready(): Promise<void> {
+  if (!globalThis.__pinhighReady) {
+    globalThis.__pinhighReady = getDriver()
+      .then(migrate)
+      .catch((err) => {
+        // Let the next request retry rather than caching a dead database.
+        globalThis.__pinhighReady = undefined;
+        throw err;
+      });
+  }
+  return globalThis.__pinhighReady;
 }
 
 /* -------------------------------------------------------------------------
    Query helpers
    ---------------------------------------------------------------------- */
 
-type Param = string | number | bigint | null | Uint8Array;
+/**
+ * Convert `?` placeholders to Postgres `$1…$n`, skipping string literals and
+ * comments. The repositories were written against `?` and there is no reason
+ * to churn every query for punctuation.
+ */
+function numberPlaceholders(sql: string): string {
+  let out = "";
+  let n = 0;
+  let inString = false;
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (inString) {
+      out += ch;
+      if (ch === "'") {
+        if (sql[i + 1] === "'") {
+          out += "'";
+          i++;
+        } else {
+          inString = false;
+        }
+      }
+      continue;
+    }
+    if (ch === "'") {
+      inString = true;
+      out += ch;
+    } else if (ch === "?") {
+      out += `$${++n}`;
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
 
 /** Booleans are stored as 0/1 and undefined is not a bindable value. */
-function bind(params: unknown[]): Param[] {
+function bind(params: unknown[]): unknown[] {
   return params.map((p) => {
     if (p === undefined || p === null) return null;
     if (typeof p === "boolean") return p ? 1 : 0;
@@ -100,31 +265,31 @@ function bind(params: unknown[]): Param[] {
   });
 }
 
-/**
- * node:sqlite hands back null-prototype objects. React Server Components refuse
- * to serialise those across the server/client boundary ("Only plain objects …
- * can be passed to Client Components"), and the failure surfaces far from here
- * as an opaque render error. Reshaping every row once, at the point they enter
- * the application, is much cheaper than debugging it at each boundary.
- */
-function plain<T>(row: unknown): T {
-  return { ...(row as object) } as T;
+async function query(sql: string, params: unknown[]): Promise<QueryResult> {
+  await ready();
+  const driver = await getDriver();
+  return driver.query(numberPlaceholders(sql), bind(params));
 }
 
-export function all<T = Record<string, unknown>>(sql: string, ...params: unknown[]): T[] {
-  return (getDb().prepare(sql).all(...bind(params)) as unknown[]).map((r) => plain<T>(r));
-}
-
-export function get<T = Record<string, unknown>>(
+export async function all<T = Record<string, unknown>>(
   sql: string,
   ...params: unknown[]
-): T | undefined {
-  const row = getDb().prepare(sql).get(...bind(params));
-  return row === undefined || row === null ? undefined : plain<T>(row);
+): Promise<T[]> {
+  const res = await query(sql, params);
+  return res.rows as T[];
 }
 
-export function run(sql: string, ...params: unknown[]) {
-  return getDb().prepare(sql).run(...bind(params));
+export async function get<T = Record<string, unknown>>(
+  sql: string,
+  ...params: unknown[]
+): Promise<T | undefined> {
+  const res = await query(sql, params);
+  return (res.rows[0] as T | undefined) ?? undefined;
+}
+
+export async function run(sql: string, ...params: unknown[]): Promise<{ changes: number }> {
+  const res = await query(sql, params);
+  return { changes: res.rowCount };
 }
 
 /**
@@ -132,21 +297,10 @@ export function run(sql: string, ...params: unknown[]) {
  * these (§4.2 step 5) — a partial stock write is the worst possible outcome,
  * because it looks like it worked.
  */
-export function transaction<T>(fn: () => T): T {
-  const db = getDb();
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const result = fn();
-    db.exec("COMMIT");
-    return result;
-  } catch (err) {
-    try {
-      db.exec("ROLLBACK");
-    } catch {
-      /* the original error is the one worth surfacing */
-    }
-    throw err;
-  }
+export async function transaction<T>(fn: () => Promise<T>): Promise<T> {
+  await ready();
+  const driver = await getDriver();
+  return driver.withTransaction(fn);
 }
 
 export function uid(): string {
@@ -172,13 +326,13 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   quote_response_hours: "24",
 };
 
-export function getSetting(key: string): string {
-  const row = get<{ value: string }>("SELECT value FROM settings WHERE key = ?", key);
+export async function getSetting(key: string): Promise<string> {
+  const row = await get<{ value: string }>("SELECT value FROM settings WHERE key = ?", key);
   return row?.value ?? SETTING_DEFAULTS[key] ?? "";
 }
 
-export function setSetting(key: string, value: string): void {
-  run(
+export async function setSetting(key: string, value: string): Promise<void> {
+  await run(
     `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
     key,
@@ -187,8 +341,8 @@ export function setSetting(key: string, value: string): void {
   );
 }
 
-export function getSettings(): Record<string, string> {
-  const rows = all<{ key: string; value: string }>("SELECT key, value FROM settings");
+export async function getSettings(): Promise<Record<string, string>> {
+  const rows = await all<{ key: string; value: string }>("SELECT key, value FROM settings");
   const out = { ...SETTING_DEFAULTS };
   for (const r of rows) out[r.key] = r.value;
   return out;
@@ -198,8 +352,13 @@ export function getSettings(): Record<string, string> {
    Audit log (§11)
    ---------------------------------------------------------------------- */
 
-export function audit(action: string, subject?: string, detail?: unknown, actor?: string) {
-  run(
+export async function audit(
+  action: string,
+  subject?: string,
+  detail?: unknown,
+  actor?: string,
+): Promise<void> {
+  await run(
     `INSERT INTO audit_log (id, actor, action, subject, detail, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
     uid(),

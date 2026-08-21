@@ -12,10 +12,10 @@ import { listBrands } from "@/lib/repo/catalogue";
  * the old consumer rankings will fall, and that is the intended outcome —
  * success is measured in corporate enquiries, not traffic.
  */
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
 
-  const products = all<{ article_number: string; updated_at: string }>(
+  const products = await all<{ article_number: string; updated_at: string }>(
     "SELECT article_number, updated_at FROM products WHERE is_visible = 1 AND condition = 'new'",
   );
 
@@ -32,7 +32,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly" as const,
       priority: 0.8,
     })),
-    ...listBrands().map((b) => ({
+    ...(await listBrands()).map((b) => ({
       url: `${base}/brand/${encodeURIComponent(b.value.toLowerCase())}`,
       changeFrequency: "weekly" as const,
       priority: 0.8,

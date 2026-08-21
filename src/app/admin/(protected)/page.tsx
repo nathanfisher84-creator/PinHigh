@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
  * 24 hours is the first thing on the page, and a notification that never landed
  * is flagged loudly rather than left in a log.
  */
-export default function AdminDashboard() {
-  const stats = getDashboardStats();
+export default async function AdminDashboard() {
+  const stats = await getDashboardStats();
 
   return (
     <div>

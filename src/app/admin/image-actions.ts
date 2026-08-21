@@ -58,7 +58,7 @@ export async function uploadProductImages(
 ): Promise<UploadResult> {
   await requireAdmin();
 
-  const product = getProductRef(articleNumber);
+  const product = await getProductRef(articleNumber);
   if (!product) {
     return { ok: false, added: 0, message: "That article number no longer exists.", errors: [] };
   }
@@ -85,7 +85,7 @@ export async function uploadProductImages(
   }
 
   if (added > 0) {
-    audit("image.upload", articleNumber, { added, failed: errors.length });
+    await audit("image.upload", articleNumber, { added, failed: errors.length });
     revalidatePath("/admin/products");
     revalidatePath(`/product/${articleNumber}`);
     revalidatePath("/catalogue");
@@ -104,7 +104,7 @@ export async function uploadProductImages(
 export async function removeProductImage(imageId: string, articleNumber: string) {
   await requireAdmin();
   await deleteProductImage(imageId);
-  audit("image.delete", imageId);
+  await audit("image.delete", imageId);
   revalidatePath("/admin/products");
   revalidatePath(`/product/${articleNumber}`);
   revalidatePath("/catalogue");
@@ -190,7 +190,7 @@ export async function previewImageZip(formData: FormData): Promise<ZipPreview> {
 
   const result = matchImageFilenames(
     paths.map((p) => ({ path: p })),
-    listArticleNumbers(),
+    (await listArticleNumbers()),
   );
 
   if (result.matched.length === 0) {
@@ -215,7 +215,7 @@ export async function previewImageZip(formData: FormData): Promise<ZipPreview> {
   }
 
   const covered = new Set(result.articlesCovered);
-  const stillWithout = articlesWithoutImages().filter((a) => !covered.has(a));
+  const stillWithout = (await articlesWithoutImages()).filter((a) => !covered.has(a));
 
   return {
     ok: true,
@@ -268,14 +268,14 @@ export async function commitImageZip(
   // the same reasoning as rebuilding the stock diff before committing (§4.2).
   const result = matchImageFilenames(
     paths.map((p) => ({ path: p })),
-    listArticleNumbers(),
+    (await listArticleNumbers()),
   );
 
   const failed: { filename: string; reason: string }[] = [];
   let added = 0;
 
   for (const match of result.matched) {
-    const product = getProductRef(match.article_number);
+    const product = await getProductRef(match.article_number);
     if (!product) {
       failed.push({ filename: match.filename, reason: "Article no longer exists." });
       continue;
@@ -306,7 +306,7 @@ export async function commitImageZip(
     }
   }
 
-  audit("image.bulk", filename, { added, failed: failed.length }, actor);
+  await audit("image.bulk", filename, { added, failed: failed.length }, actor);
 
   revalidatePath("/admin/products");
   revalidatePath("/catalogue");
