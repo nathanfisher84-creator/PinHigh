@@ -17,30 +17,20 @@ export default async function AdminRecipientsPage() {
     "SELECT id, name, channel, value, is_active FROM notification_recipients ORDER BY channel ASC, name ASC",
   );
 
-  const emailConfigured = Boolean(
-    (process.env.RESEND_API_KEY && process.env.ORDER_FROM_EMAIL) ||
-      (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
-  );
-  const whatsappConfigured = Boolean(
-    process.env.WHATSAPP_ACCESS_TOKEN &&
-      process.env.WHATSAPP_PHONE_NUMBER_ID &&
-      process.env.WHATSAPP_TEMPLATE_NAME,
-  );
+  // Owner-entered Gmail (Settings) counts, not just the environment.
+  const { emailConfigured: isEmailConfigured } = await import("@/lib/notify/email");
+  const emailConfigured = await isEmailConfigured();
 
   return (
     <div>
       <h1 className="text-2xl">Who gets notified</h1>
       <p className="mt-2 max-w-2xl text-sm text-graphite-ink">
-        Everyone active here is told the moment a quote request arrives. Email
-        carries the full summary and a spreadsheet of the lines; WhatsApp carries
-        the headline so someone picks it up fast.
+        Everyone active here is emailed the moment a quote request arrives —
+        the full summary with a spreadsheet of the lines attached. Add as many
+        addresses as you like; buyers never see any of them.
       </p>
 
-      <RecipientManager
-        recipients={recipients}
-        emailConfigured={emailConfigured}
-        whatsappConfigured={whatsappConfigured}
-      />
+      <RecipientManager recipients={recipients} emailConfigured={emailConfigured} />
     </div>
   );
 }

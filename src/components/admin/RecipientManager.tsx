@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import {
   addRecipient,
   removeRecipient,
-  testWhatsApp,
   toggleRecipient,
 } from "@/app/admin/actions";
 import type { RecipientRow } from "@/app/admin/(protected)/recipients/page";
@@ -20,55 +19,31 @@ import type { RecipientRow } from "@/app/admin/(protected)/recipients/page";
 export function RecipientManager({
   recipients,
   emailConfigured,
-  whatsappConfigured,
 }: {
   recipients: RecipientRow[];
   emailConfigured: boolean;
-  whatsappConfigured: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [testMessage, setTestMessage] = useState<string | null>(null);
-  const [channel, setChannel] = useState<"email" | "whatsapp">("email");
 
-  const byChannel = (c: "email" | "whatsapp") => recipients.filter((r) => r.channel === c);
+  // Email-only by the owner's decision — quotes travel one channel, and the
+  // page stays as simple as the job. (WhatsApp for BUYERS — the "message us"
+  // button on confirmations — is a different feature and lives in Settings.)
+  const emailRecipients = recipients.filter((r) => r.channel === "email");
 
   return (
     <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_20rem] lg:items-start">
       <div className="space-y-8">
         <Channel
           title="Email"
-          note="The system of record. Every request is emailed with a CSV of the lines attached."
+          note="The system of record. Every request is emailed with a spreadsheet of the lines attached."
           configured={emailConfigured}
-          missing="Add GMAIL_USER and GMAIL_APP_PASSWORD (or RESEND_API_KEY and ORDER_FROM_EMAIL) to the environment to turn this on."
-          recipients={byChannel("email")}
+          missing="Nothing is being sent yet — set up the sending account under Settings → Email sending, then send yourself a test."
+          recipients={emailRecipients}
           pending={pending}
           onToggle={(id, active) => startTransition(() => toggleRecipient(id, active))}
           onRemove={(id) => startTransition(() => removeRecipient(id))}
         />
-
-        <Channel
-          title="WhatsApp"
-          note="A short headline so someone picks the request up fast. Each number must have opted in to messages from the business number first."
-          configured={whatsappConfigured}
-          missing="Needs a verified Meta Business account, a dedicated sender number, and an approved template under the utility category."
-          recipients={byChannel("whatsapp")}
-          pending={pending}
-          onToggle={(id, active) => startTransition(() => toggleRecipient(id, active))}
-          onRemove={(id) => startTransition(() => removeRecipient(id))}
-          onTest={(value) =>
-            startTransition(async () => {
-              const res = await testWhatsApp(value);
-              setTestMessage(res.message);
-            })
-          }
-        />
-
-        {testMessage && (
-          <p className="hairline bg-paper-raised px-4 py-3 text-sm" role="status">
-            {testMessage}
-          </p>
-        )}
       </div>
 
       <aside className="hairline bg-paper-raised px-4 py-4 lg:sticky lg:top-6">
@@ -91,41 +66,19 @@ export function RecipientManager({
             className="w-full hairline bg-paper px-3 py-2 text-sm focus:outline-none focus:border-fairway"
           />
 
-          <fieldset className="mt-4">
-            <legend className="label-caps mb-1">Channel</legend>
-            <div className="flex gap-4">
-              {(["email", "whatsapp"] as const).map((c) => (
-                <label key={c} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="channel"
-                    value={c}
-                    checked={channel === c}
-                    onChange={() => setChannel(c)}
-                    className="accent-[var(--color-fairway)]"
-                  />
-                  {c === "email" ? "Email" : "WhatsApp"}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <input type="hidden" name="channel" value="email" />
 
           <label htmlFor="value" className="label-caps mt-4 block mb-1">
-            {channel === "email" ? "Email address" : "WhatsApp number"}
+            Email address
           </label>
           <input
             id="value"
             name="value"
             required
-            type={channel === "email" ? "email" : "tel"}
-            placeholder={channel === "email" ? "name@pinhighuae.com" : "+971501234567"}
+            type="email"
+            placeholder="name@gmail.com"
             className="w-full hairline bg-paper px-3 py-2 text-sm tabular focus:outline-none focus:border-fairway"
           />
-          {channel === "whatsapp" && (
-            <p className="mt-1 text-xs text-graphite-ink">
-              Full international format, including the country code.
-            </p>
-          )}
 
           {error && (
             <p className="mt-3 text-xs text-flag-ink" role="alert">
