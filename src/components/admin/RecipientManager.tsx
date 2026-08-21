@@ -40,7 +40,7 @@ export function RecipientManager({
           title="Email"
           note="The system of record. Every request is emailed with a CSV of the lines attached."
           configured={emailConfigured}
-          missing="Add RESEND_API_KEY and ORDER_FROM_EMAIL to the environment to turn this on."
+          missing="Add GMAIL_USER and GMAIL_APP_PASSWORD (or RESEND_API_KEY and ORDER_FROM_EMAIL) to the environment to turn this on."
           recipients={byChannel("email")}
           pending={pending}
           onToggle={(id, active) => startTransition(() => toggleRecipient(id, active))}

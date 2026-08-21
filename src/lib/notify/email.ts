@@ -15,48 +15,113 @@ import type { Recipient } from "./index";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
+/**
+ * Two interchangeable transports behind one message shape:
+ *
+ *   - Gmail SMTP when GMAIL_USER + GMAIL_APP_PASSWORD are set. Works with
+ *     nothing but a Gmail account and an app password — no domain to verify —
+ *     which is what gets a small business receiving quotes today. The buyer's
+ *     copy arrives from the Gmail address (with the Pin High display name).
+ *   - Resend when RESEND_API_KEY + ORDER_FROM_EMAIL are set. The upgrade
+ *     path once the domain's DNS is in hand: same emails, sent from
+ *     quotes@pinhighuae.com. If both are configured, Resend wins.
+ *
+ * Swapping is an env-var change; nothing above this file knows or cares.
+ */
+export function emailConfigured(): boolean {
+  return Boolean(
+    (process.env.RESEND_API_KEY && process.env.ORDER_FROM_EMAIL) ||
+      (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
+  );
+}
+
+interface OutboundEmail {
+  to: string;
+  replyTo?: string;
+  subject: string;
+  html: string;
+  attachments?: { filename: string; content: Buffer }[];
+}
+
+async function deliver(msg: OutboundEmail): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY;
+  const resendFrom = process.env.ORDER_FROM_EMAIL;
+
+  if (resendKey && resendFrom) {
+    const response = await fetch(RESEND_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: resendFrom,
+        to: [msg.to],
+        reply_to: msg.replyTo,
+        subject: msg.subject,
+        html: msg.html,
+        attachments: msg.attachments?.map((a) => ({
+          filename: a.filename,
+          content: a.content.toString("base64"),
+        })),
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(`Resend returned ${response.status}: ${detail.slice(0, 300)}`);
+    }
+    return;
+  }
+
+  const gmailUser = process.env.GMAIL_USER;
+  const gmailPassword = process.env.GMAIL_APP_PASSWORD;
+  if (gmailUser && gmailPassword) {
+    const { default: nodemailer } = await import("nodemailer");
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: { user: gmailUser, pass: gmailPassword },
+    });
+    await transporter.sendMail({
+      from: { name: "Pin High UAE", address: gmailUser },
+      to: msg.to,
+      replyTo: msg.replyTo,
+      subject: msg.subject,
+      html: msg.html,
+      attachments: msg.attachments,
+    });
+    return;
+  }
+
+  throw new Error("Email is not configured.");
+}
+
 export async function sendQuoteEmail(
   quote: QuoteRequestWithLines,
   recipient: Recipient,
   isBuyerCopy = false,
 ): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.ORDER_FROM_EMAIL;
-  if (!apiKey || !from) throw new Error("Email is not configured.");
-
-  const response = await fetch(RESEND_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: [recipient.value],
-      reply_to: isBuyerCopy ? undefined : quote.email,
-      subject: isBuyerCopy
-        ? `We have your quote request — ${quote.reference}`
-        : `Quote request ${quote.reference} — ${quote.company_name} (${quote.total_units} units)`,
-      html: renderQuoteEmail(quote, isBuyerCopy),
-      // The CSV carries indicative unit prices for the sales team. The buyer
-      // copy gets no attachment at all: the public site shows no prices, and
-      // a figure arriving as an attachment would undo that as surely as one
-      // on a page.
-      attachments: isBuyerCopy
-        ? undefined
-        : [
-            {
-              filename: `${quote.reference}-lines.csv`,
-              content: Buffer.from(quoteLinesCsv(quote), "utf8").toString("base64"),
-            },
-          ],
-    }),
+  await deliver({
+    to: recipient.value,
+    replyTo: isBuyerCopy ? undefined : quote.email,
+    subject: isBuyerCopy
+      ? `We have your quote request — ${quote.reference}`
+      : `Quote request ${quote.reference} — ${quote.company_name} (${quote.total_units} units)`,
+    html: renderQuoteEmail(quote, isBuyerCopy),
+    // The CSV carries indicative unit prices for the sales team. The buyer
+    // copy gets no attachment at all: the public site shows no prices, and
+    // a figure arriving as an attachment would undo that as surely as one
+    // on a page.
+    attachments: isBuyerCopy
+      ? undefined
+      : [
+          {
+            filename: `${quote.reference}-lines.csv`,
+            content: Buffer.from(quoteLinesCsv(quote), "utf8"),
+          },
+        ],
   });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`Resend returned ${response.status}: ${detail.slice(0, 300)}`);
-  }
 }
 
 /* -------------------------------------------------------------------------

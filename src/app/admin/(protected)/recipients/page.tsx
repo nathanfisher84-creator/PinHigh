@@ -17,7 +17,10 @@ export default async function AdminRecipientsPage() {
     "SELECT id, name, channel, value, is_active FROM notification_recipients ORDER BY channel ASC, name ASC",
   );
 
-  const emailConfigured = Boolean(process.env.RESEND_API_KEY && process.env.ORDER_FROM_EMAIL);
+  const emailConfigured = Boolean(
+    (process.env.RESEND_API_KEY && process.env.ORDER_FROM_EMAIL) ||
+      (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
+  );
   const whatsappConfigured = Boolean(
     process.env.WHATSAPP_ACCESS_TOKEN &&
       process.env.WHATSAPP_PHONE_NUMBER_ID &&

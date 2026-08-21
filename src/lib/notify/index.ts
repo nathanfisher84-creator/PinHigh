@@ -2,7 +2,7 @@ import "server-only";
 import { all } from "@/lib/db";
 import type { NotificationLog, QuoteRequestWithLines } from "@/lib/domain/types";
 import { recordNotification } from "@/lib/repo/quotes";
-import { sendQuoteEmail } from "./email";
+import { emailConfigured, sendQuoteEmail } from "./email";
 import { sendQuoteWhatsApp } from "./whatsapp";
 
 /**
@@ -67,7 +67,7 @@ export async function dispatchQuoteNotifications(
   const emailLog: NotificationLog = [];
   const whatsappLog: NotificationLog = [];
 
-  const emailConfigured = Boolean(process.env.RESEND_API_KEY && process.env.ORDER_FROM_EMAIL);
+  const canEmail = emailConfigured();
   const whatsappConfigured = Boolean(
     process.env.WHATSAPP_ACCESS_TOKEN &&
       process.env.WHATSAPP_PHONE_NUMBER_ID &&
@@ -76,12 +76,12 @@ export async function dispatchQuoteNotifications(
 
   /* -- Email: the system of record (§7.3) ------------------------------- */
   for (const recipient of (await activeRecipients("email"))) {
-    if (!emailConfigured) {
+    if (!canEmail) {
       emailLog.push({
         recipient: recipient.value,
         name: recipient.name,
         status: "skipped",
-        detail: "Email is not configured yet. Set RESEND_API_KEY and ORDER_FROM_EMAIL.",
+        detail: "Email is not configured yet. Set GMAIL_USER and GMAIL_APP_PASSWORD (or RESEND_API_KEY and ORDER_FROM_EMAIL).",
         attempts: 0,
         at,
       });
@@ -110,7 +110,7 @@ export async function dispatchQuoteNotifications(
   }
 
   /* -- Buyer's own copy, clearly a request not a confirmation (§7.2 step 7) */
-  if (emailConfigured) {
+  if (canEmail) {
     const result = await withRetry(() =>
       sendQuoteEmail(quote, { id: "buyer", name: quote.contact_name, channel: "email", value: quote.email }, true),
     );

@@ -71,7 +71,14 @@ export default async function QuoteConfirmationPage({ params }: { params: Params
             Send us a WhatsApp about this
           </a>
         )}
-        {/* Print-to-PDF is the copy the buyer keeps (§7.2 step 6). */}
+        {/* Two ways to keep a copy: a real file, and print-to-PDF. */}
+        <a
+          href={`/quote/${encodeURIComponent(quote.reference)}/download`}
+          download
+          className="hairline px-5 py-2.5 text-sm hover:border-fairway transition-colors duration-150"
+        >
+          Download your request (Excel)
+        </a>
         <PrintButton />
         <Link
           href="/catalogue"
