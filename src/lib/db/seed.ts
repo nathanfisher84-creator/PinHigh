@@ -97,37 +97,65 @@ function seedRecipients() {
    Catalogue
    ---------------------------------------------------------------------- */
 
-function templatePath(): string | null {
-  const candidates = [
-    process.env.PINHIGH_SEED_FILE,
-    path.join(process.cwd(), "seed", "adidas-delivery.xlsx"),
-  ].filter(Boolean) as string[];
-  return candidates.find((p) => existsSync(p)) ?? null;
+function seedFile(name: string): string | null {
+  const candidate = path.join(process.cwd(), "seed", name);
+  return existsSync(candidate) ? candidate : null;
+}
+
+/**
+ * Seed the catalogue the way the business actually works:
+ *
+ *   1. the implementation file  — what the products are
+ *   2. the invoice              — what is actually on the shelf
+ *
+ * Running both proves the whole path on every cold boot. If either importer
+ * regresses the site comes up wrong immediately, rather than the failure
+ * hiding until someone uploads a real file.
+ */
+function importSeedFile(
+  file: string,
+): { rows: number; source?: string; invoices?: string[]; orders?: string[] } | null {
+  const buf = readFileSync(file);
+  const workbook = readWorkbook(buf, path.basename(file));
+  const sheet = pickStockSheet(workbook);
+  const parsed = parseStockSheet(sheet.rows);
+  if (parsed.rows.length === 0) return null;
+
+  const mode =
+    parsed.source === "adidas-order"
+      ? "details"
+      : parsed.source === "adidas"
+        ? "add"
+        : "upsert";
+
+  const diff = buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
+  commitImport(parsed.rows, mode, diff, {
+    filename: path.basename(file),
+    uploadedBy: "seed",
+    invoiceRefs: parsed.billingDocuments,
+    orderRefs: parsed.orderNumbers,
+  });
+
+  return { rows: parsed.rows.length, source: parsed.source };
 }
 
 function seedCatalogue(): boolean {
   const existing = get<{ n: number }>("SELECT COUNT(*) AS n FROM products");
   if ((existing?.n ?? 0) > 0) return false;
 
-  const file = templatePath();
-  if (!file) return false;
+  // Order matters: the template defines the products, the invoice fills in
+  // the stock against them.
+  const template =
+    process.env.PINHIGH_SEED_FILE ?? seedFile("adidas-implementation.xlsx");
+  const invoice = seedFile("adidas-invoice.xlsx");
 
-  const buf = readFileSync(file);
-  const workbook = readWorkbook(buf, path.basename(file));
-  const sheet = pickStockSheet(workbook);
-  const parsed = parseStockSheet(sheet.rows);
+  let seeded = false;
+  if (template && existsSync(template)) {
+    seeded = importSeedFile(template) !== null;
+  }
+  if (invoice) importSeedFile(invoice);
 
-  if (parsed.rows.length === 0) return false;
-
-  const mode = parsed.source === "adidas" ? "add" : "upsert";
-  const diff = buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
-  commitImport(parsed.rows, mode, diff, {
-    filename: path.basename(file),
-    uploadedBy: "seed",
-    // Record the invoice so re-uploading the very same file is correctly
-    // refused rather than counting the delivery into stock a second time.
-    invoiceRefs: parsed.billingDocuments,
-  });
+  if (!seeded) return false;
 
   // Colour swatches for the colour switcher (§6.3). The importer does not set
   // these — colour_hex is owner-set — but a catalogue with no swatches cannot

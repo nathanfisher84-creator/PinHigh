@@ -11,12 +11,13 @@ Built to `pinhigh-catalogue-spec.md`. Section references throughout the code
 ```bash
 npm install
 npm run dev     # http://localhost:3400
-npm test        # 114 tests
+npm test        # 125 tests
 ```
 
-The catalogue seeds itself on first run from `seed/adidas-delivery.xlsx` — the
-real adidas invoice — by running it through the real importer. adidas is the
-only brand; there is no sample data. No configuration is needed.
+The catalogue seeds itself on first run by running both real adidas files
+through the real importers, in the order the business uses them: the
+implementation file defines the products, then the invoice sets the stock.
+adidas is the only brand; there is no sample data.
 
 ---
 
@@ -82,7 +83,7 @@ src/
     cart/store.ts         localStorage basket, keyed by SKU
     redirects.ts          the Shopify redirect map (§14.3)
 supabase/migrations/      Postgres schema + RLS (the §2 target)
-tests/                    114 tests, node:test, no test framework dependency
+tests/                    125 tests, node:test, no test framework dependency
 ```
 
 ### Two decisions that depart from the spec
@@ -153,49 +154,63 @@ defensive code in the project.
 
 ---
 
-## The adidas delivery file
+## The two adidas files
 
-This is the file the client actually receives, and it is **not a stock list**.
-It is an SAP billing export of what adidas invoiced Pin High: around sixty
-columns of accounting detail, of which four matter.
+adidas send two SAP exports and they do different jobs. Both are detected by
+their own columns, so the owner just uploads whatever arrived.
+
+**The division of labour is the thing to get right:**
+
+> The implementation file is the **template** — what the products *are*.
+> The invoice is the **quantities** — what is actually on the shelf.
+> **No stock is ever taken from the implementation file.**
+
+### The implementation file — the template
+
+`Order Number 5052282932`. Every article bought for the season, with the detail
+the invoice does not carry.
 
 | Column | Becomes |
 |---|---|
-| `Material` | the article number — six characters, `HZ6891` |
-| `AFS Grid Value` | the size — `XS`…`4XL` (not `Grid Value`, which is a numeric code) |
-| `Invoiced Quantity` | units, written `3.000` |
-| `Net value` ÷ qty | unit **cost**, admin-only |
-| `Subtotal 1` ÷ qty | unit RRP |
+| `Article No` | article number — six characters, `HZ6891` |
+| `Article Name` | product name **and** colourway, in one fixed-width field |
+| `Business Segment Description` + `Gender Description` | fit |
+| `Size` | the article's size run |
+| `Net Price/Unit` | unit cost, admin-only |
+| `Manual Price` | RRP reference |
 
-It is detected by those columns rather than pushed through the fuzzy header
-matching, which would guess wrong on sixty columns of accounting detail. The
-Pin High stock template still imports exactly as before; both are tested.
+It imports in **details** mode: articles, names, colourways, fit, sizes and
+prices. New sizes are created at zero; an existing quantity is never touched.
+Its own `Quantity Ordered` and `Delivered Qty` columns are read only to report
+on, never to set stock — they are order-book positions, and putting them on the
+site would advertise units nobody can ship. That makes the import idempotent:
+re-upload a refreshed template as often as adidas send one.
 
-Three decisions worth knowing about:
+`Article Name` is two fixed-width fields run together —
+`PERF TXT POLO       WHITE/MAROON` — so a run of two or more spaces is the
+boundary. adidas' colour codes are kept as adidas writes them: expanding
+`FROTUR` into a guess at "Frozen Turquoise" would be inventing data.
 
-**Cost never becomes the public price.** Two figures per line and neither is a
-selling price: `Net value` is what Pin High pays adidas, `Subtotal 1` is
-adidas' gross. Cost is stored in an admin-only `cost_price` column and the
-corporate price is left null for the owner to set. Importing cost as the
-public price would put a distributor's buying terms in front of its own
-customers — the most damaging thing this importer could do.
+Category is inferred from the product name only where the name says so plainly.
+21 of the 23 articles resolve to Polos; `M BU DRIVER HD` does not, so those two
+are flagged for the owner rather than filed under a guess.
 
-**An invoice adds; it does not replace.** A delivery arriving is not a stock
-take, so the default mode for an adidas file adds to what is on the shelf and
-leaves sizes that were not on the invoice untouched. Applying the same invoice
-twice would count the delivery twice, so every `Billing Document` number is
-recorded and a repeat is refused unless the owner types `APPLY-AGAIN`.
+### The invoice — the quantities
 
-**The file has no product names.** No name, colour, category or gender exists
-in an invoice. Articles go live under their article number — which a trade
-buyer can work with, and which §6.2 says they navigate by — flagged
-`needs_review`, and Admin → Products lists them until the owner fills in the
-rest. Nothing is invented.
+`Billing Document 5101901080`. What actually left the warehouse: `Material`,
+`AFS Grid Value`, `Invoiced Quantity`. It adds to stock, and every invoice
+number is recorded so the same shipment cannot be counted twice.
 
-A caveat the owner should know: an invoice only records what came *in*.
-Nothing here decrements stock as it is sold, so the figures drift until either
-a full stock take is uploaded in "set quantities" mode, or sales are deducted
-some other way.
+Seeding both in order gives the correct result: **23 articles, 141 sizes, 750
+units** — the invoice's figure, not the template's 1,000.
+
+**Cost never becomes the public price.** Both files carry what Pin High pays
+adidas. It goes in an admin-only `cost_price` column and the corporate price is
+left null for the owner to set. Publishing a distributor's buying terms to its
+own customers would be the most damaging thing either importer could do.
+
+A caveat worth knowing: an invoice records what came in, and nothing decrements
+stock as it is sold, so the figures drift until a stock take is uploaded.
 
 
 ## Images

@@ -55,7 +55,11 @@ export interface PreviewResult {
   inferred?: { key: string; header: string }[];
   ignored?: string[];
   /** Which file shape this was read as. */
-  source?: "template" | "adidas";
+  source?: "template" | "adidas" | "adidas-order";
+  /** adidas implementation file: sales orders covered. */
+  orderNumbers?: string[];
+  /** adidas implementation file: articles with nothing shipped yet. */
+  awaitingDelivery?: string[];
   /** adidas: invoice numbers in this file. */
   invoices?: string[];
   /** adidas: invoices already applied, which would double-count stock. */
@@ -201,6 +205,8 @@ export async function previewStockFile(formData: FormData): Promise<PreviewResul
     filename: file.name,
     diff,
     source: parsed.source ?? "template",
+    orderNumbers: parsed.orderNumbers ?? [],
+    awaitingDelivery: parsed.awaitingDelivery ?? [],
     invoices,
     alreadyApplied,
     needingDetails,
@@ -267,6 +273,7 @@ export async function commitStockFile(
     const diff = buildDiff(parsed.rows, mode, parsed.issues, parsed.rowsRead, parsed.rowsFailed);
 
     const invoices = parsed.billingDocuments ?? [];
+    const orders = parsed.orderNumbers ?? [];
 
     // Refuse to count a delivery twice unless the owner has said so explicitly.
     if (mode === "add" && invoices.length > 0 && confirmation !== "APPLY-AGAIN") {
@@ -295,6 +302,7 @@ export async function commitStockFile(
       storagePath: token,
       uploadedBy: actor,
       invoiceRefs: invoices,
+      orderRefs: orders,
     });
 
     // Remember any manual mapping so the owner maps an odd column once (§4.1).

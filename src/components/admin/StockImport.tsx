@@ -23,7 +23,8 @@ import { units } from "@/lib/format";
 export function StockImport() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [mode, setMode] = useState<ImportMode>("upsert");
-  const isAdidas = preview?.source === "adidas";
+  const isInvoice = preview?.source === "adidas";
+  const isOrderBook = preview?.source === "adidas-order";
   const [confirmation, setConfirmation] = useState("");
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [mapping, setMapping] = useState<Record<string, number>>({});
@@ -44,9 +45,14 @@ export function StockImport() {
       }
       const result = await previewStockFile(formData);
       setPreview(result);
-      // An adidas file is a delivery: it adds to the shelf rather than
-      // replacing what is on it.
-      if (result.source === "adidas" && mode !== "add") setMode("add");
+      /*
+       * Each adidas file has one sensible default. The implementation file
+       * states a position, so it sets; an invoice is a shipment, so it adds —
+       * unless its order is already on the shelf, in which case setting is the
+       * only safe reading.
+       */
+      if (result.source === "adidas-order" && mode !== "details") setMode("details");
+      else if (result.source === "adidas" && mode !== "add") setMode("add");
     });
   };
 
@@ -93,10 +99,12 @@ export function StockImport() {
         ].join(" ")}
       >
         <p className="font-medium">Drop your adidas file here</p>
-        <p className="mt-1 text-sm text-graphite-ink max-w-lg mx-auto">
-          The invoice spreadsheet adidas send you, exactly as it arrives — all
-          sixty columns of it. A stock sheet in the Pin High template works too.
-          .xlsx, .xls or .csv, up to 10 MB.
+        <p className="mt-1 text-sm text-graphite-ink max-w-xl mx-auto">
+          Either file adidas send you, exactly as it arrives. The{" "}
+          <strong>implementation file</strong> carries the product detail and
+          what has been delivered — that is the one that builds the catalogue.
+          An <strong>invoice</strong> records a single shipment. A stock sheet in
+          the Pin High template works too. .xlsx, .xls or .csv, up to 10 MB.
         </p>
         <label className="mt-4 inline-block">
           <span className="cursor-pointer bg-fairway px-4 py-2 text-sm text-paper hover:bg-ink transition-colors duration-150 inline-block">
@@ -338,6 +346,23 @@ export function StockImport() {
             </details>
           )}
 
+          {isOrderBook && (
+            <section className="mt-6 hairline border-fairway bg-fairway-wash px-4 py-4">
+              <h3 className="font-medium">
+                This is the implementation file
+                {preview.orderNumbers?.length
+                  ? ` for order ${preview.orderNumbers.join(", ")}`
+                  : ""}
+              </h3>
+              <p className="mt-1 text-sm">
+                It is the template: names, colourways, fit, sizes and prices.
+                <strong> No stock is taken from it</strong> — quantities stay
+                exactly as they are, and the invoice is the only thing that sets
+                them. Safe to re-upload whenever adidas send a fresh copy.
+              </p>
+            </section>
+          )}
+
           {/* An invoice already applied would double-count the delivery. */}
           {preview.alreadyApplied && preview.alreadyApplied.length > 0 && (
             <section className="mt-6 hairline border-flag bg-flag-wash px-4 py-4">
@@ -375,7 +400,55 @@ export function StockImport() {
           <fieldset className="mt-8">
             <legend className="label-caps mb-2">What should happen</legend>
 
-            {isAdidas && (
+            {isOrderBook && (
+              <label className="mb-2 flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
+                <input
+                  type="radio"
+                  name="mode"
+                  value="details"
+                  checked={mode === "details"}
+                  onChange={() => {
+                    setMode("details");
+                    if (fileRef.current) upload(fileRef.current, mapping);
+                  }}
+                  className="mt-1 accent-[var(--color-fairway)]"
+                />
+                <span>
+                  <strong>Products and sizes only</strong>{" "}
+                  <span className="text-xs text-graphite-ink">(recommended)</span>
+                  <span className="block text-sm text-graphite-ink">
+                    Creates or refreshes articles, names, colourways, fit and
+                    prices, and adds any new sizes at zero. Never changes a
+                    quantity — that is the invoice&apos;s job.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {isInvoice && (
+              <label className="mb-2 flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
+                <input
+                  type="radio"
+                  name="mode"
+                  value="set"
+                  checked={mode === "set"}
+                  onChange={() => {
+                    setMode("set");
+                    if (fileRef.current) upload(fileRef.current, mapping);
+                  }}
+                  className="mt-1 accent-[var(--color-fairway)]"
+                />
+                <span>
+                  <strong>Set quantities to this invoice</strong>
+                  <span className="block text-sm text-graphite-ink">
+                    Sizes on this invoice are set to its figures rather than
+                    added to. Anything not on it is left alone.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {isInvoice && (
               <label className="mb-2 flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
                 <input
                   type="radio"
@@ -414,7 +487,7 @@ export function StockImport() {
               />
               <span>
                 <strong>Set quantities to this file</strong>
-                {!isAdidas && (
+                {!isInvoice && (
                   <span className="text-xs text-graphite-ink"> (recommended)</span>
                 )}
                 <span className="block text-sm text-graphite-ink">
@@ -485,7 +558,11 @@ export function StockImport() {
                   ? "Replace the catalogue"
                   : mode === "add"
                     ? "Add this delivery"
-                    : "Apply this update"}
+                    : mode === "set"
+                      ? "Apply these quantities"
+                      : mode === "details"
+                        ? "Add these products"
+                        : "Apply this update"}
             </button>
             <button
               type="button"

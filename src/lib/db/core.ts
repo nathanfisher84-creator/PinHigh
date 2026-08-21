@@ -63,6 +63,7 @@ function open(): DatabaseSync {
     "ALTER TABLE products ADD COLUMN cost_price REAL",
     "ALTER TABLE products ADD COLUMN needs_review INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE stock_imports ADD COLUMN invoice_refs TEXT",
+    "ALTER TABLE stock_imports ADD COLUMN order_refs TEXT",
   ]) {
     try {
       db.exec(alter);

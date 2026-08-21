@@ -43,6 +43,7 @@ export interface AdidasHeaderIndex {
   purchaseOrder: number;
   billingDate: number;
   currency: number;
+  salesOrder: number;
 }
 
 /**
@@ -74,6 +75,7 @@ function indexHeaders(headerRow: (string | null)[]): AdidasHeaderIndex {
     purchaseOrder: at("purorder", "purchaseorder"),
     billingDate: at("billingdate"),
     currency: at("documentcurrency"),
+    salesOrder: at("originalsalesorder"),
   };
 }
 
@@ -84,6 +86,9 @@ export interface AdidasParseResult {
   rowsFailed: number;
   /** Invoice numbers found in the file, used to refuse a double-import. */
   billingDocuments: string[];
+  /** The sales order this invoice bills against — joins it to the
+   *  implementation file, which carries the same number. */
+  salesOrders: string[];
   purchaseOrders: string[];
   currency: string | null;
 }
@@ -115,6 +120,7 @@ export function parseAdidasSheet(sheetRows: (string | null)[][]): AdidasParseRes
   const bySku = new Map<string, ParsedRow>();
   const billingDocuments = new Set<string>();
   const purchaseOrders = new Set<string>();
+  const salesOrders = new Set<string>();
   let currency: string | null = null;
 
   let rowsRead = 0;
@@ -145,6 +151,8 @@ export function parseAdidasSheet(sheetRows: (string | null)[][]): AdidasParseRes
     if (doc) billingDocuments.add(doc);
     const po = cell(row, idx.purchaseOrder);
     if (po) purchaseOrders.add(po);
+    const so = cell(row, idx.salesOrder);
+    if (so) salesOrders.add(so);
     if (!currency) currency = cell(row, idx.currency) || null;
 
     const rawSize = cell(row, idx.size);
@@ -243,6 +251,7 @@ export function parseAdidasSheet(sheetRows: (string | null)[][]): AdidasParseRes
     rowsRead,
     rowsFailed,
     billingDocuments: [...billingDocuments],
+    salesOrders: [...salesOrders],
     purchaseOrders: [...purchaseOrders],
     currency,
   };

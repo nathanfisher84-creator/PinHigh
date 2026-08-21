@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS stock_imports (
   filename        TEXT NOT NULL,
   storage_path    TEXT,
   uploaded_by     TEXT,
-  mode            TEXT NOT NULL CHECK (mode IN ('replace','upsert','add')),
+  mode            TEXT NOT NULL CHECK (mode IN ('replace','upsert','add','set','details')),
   rows_total      INTEGER NOT NULL DEFAULT 0,
   rows_created    INTEGER NOT NULL DEFAULT 0,
   rows_updated    INTEGER NOT NULL DEFAULT 0,
@@ -95,6 +95,9 @@ CREATE TABLE IF NOT EXISTS stock_imports (
   -- adidas invoice numbers applied by this import, so the same delivery
   -- cannot be counted into stock twice.
   invoice_refs    TEXT,
+  -- adidas sales orders covered, so an invoice for an order already
+  -- imported from an implementation file is not counted twice.
+  order_refs      TEXT,
   created_at      TEXT NOT NULL
 );
 

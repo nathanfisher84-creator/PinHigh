@@ -9,6 +9,7 @@ import {
 import { deriveSku, normaliseSize, sizeOrder } from "@/lib/domain/sizes";
 import { findHeaderRow, matchHeaders, type ColumnMap, type FieldKey, type HeaderMatch } from "./columns";
 import { detectAdidasFormat, parseAdidasSheet } from "./adidas";
+import { detectAdidasOrderFormat, parseAdidasOrderSheet } from "./adidas-order";
 
 /**
  * Turn a parsed sheet into candidate SKU rows, with every problem the owner
@@ -66,10 +67,14 @@ export interface ParseResult {
   /** Rows dropped because they could not be made valid. */
   rowsFailed: number;
   /** Which file shape this was read as. */
-  source?: "template" | "adidas";
-  /** adidas only: invoice numbers, used to refuse a double-import. */
+  source?: "template" | "adidas" | "adidas-order";
+  /** adidas invoice: invoice numbers, used to refuse a double-import. */
   billingDocuments?: string[];
+  /** adidas implementation file: the sales orders it covers. */
+  orderNumbers?: string[];
   purchaseOrders?: string[];
+  /** adidas implementation file: articles with nothing shipped yet. */
+  awaitingDelivery?: string[];
 }
 
 /* -------------------------------------------------------------------------
@@ -278,6 +283,35 @@ export function parseStockSheet(
    * than being forced through fuzzy header matching, which would guess wrong
    * on sixty columns of accounting detail.
    */
+  /*
+   * The implementation file is checked first. It is the order book — every
+   * article with its name, colour and fit — and the invoice is the shipping
+   * record against it. Both are adidas SAP exports, so the more informative
+   * one wins when a file could somehow look like either.
+   */
+  const orderHeaderRow = sheetRows.findIndex((r) => r && detectAdidasOrderFormat(r));
+  if (orderHeaderRow !== -1) {
+    const parsed = parseAdidasOrderSheet(sheetRows);
+    return {
+      header: {
+        map: {},
+        headers: (sheetRows[orderHeaderRow] ?? []).map((h) => h ?? ""),
+        unmatched: [],
+        missingRequired: [],
+        inferred: [],
+      },
+      headerRowIndex: orderHeaderRow,
+      rows: parsed.rows,
+      issues: parsed.issues,
+      rowsRead: parsed.rowsRead,
+      rowsFailed: parsed.rowsFailed,
+      source: "adidas-order",
+      orderNumbers: parsed.orderNumbers,
+      purchaseOrders: parsed.purchaseOrders,
+      awaitingDelivery: parsed.awaitingDelivery,
+    };
+  }
+
   const adidasHeaderRow = sheetRows.findIndex((r) => r && detectAdidasFormat(r));
   if (adidasHeaderRow !== -1) {
     const parsed = parseAdidasSheet(sheetRows);
@@ -296,6 +330,7 @@ export function parseStockSheet(
       rowsFailed: parsed.rowsFailed,
       source: "adidas",
       billingDocuments: parsed.billingDocuments,
+      orderNumbers: parsed.salesOrders,
       purchaseOrders: parsed.purchaseOrders,
     };
   }

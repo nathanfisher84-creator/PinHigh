@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { readWorkbook, pickStockSheet, parseCsv } from "@/lib/xlsx/read";
 import { matchHeaders, findHeaderRow, normaliseHeader } from "@/lib/import/columns";
+import { splitArticleName, categoryFromName } from "@/lib/import/adidas-order";
 import {
   parseStockSheet,
   parsePrice,
@@ -24,6 +25,7 @@ import {
 
 const TEMPLATE = path.join(import.meta.dirname, "fixtures", "pinhigh-stock-template.xlsx");
 const ADIDAS = path.join(import.meta.dirname, "fixtures", "adidas-delivery.xlsx");
+const ADIDAS_ORDER = path.join(import.meta.dirname, "fixtures", "adidas-implementation.xlsx");
 
 function loadTemplate() {
   const wb = readWorkbook(readFileSync(TEMPLATE), "pinhigh-stock-template.xlsx");
@@ -175,6 +177,137 @@ describe("the adidas delivery file", () => {
     assert.equal(skus.size, parsed.rows.length);
     assert.ok(skus.has("HZ6891-M"));
     assert.ok(skus.has("HZ6893-4XL"));
+  });
+});
+
+describe("the adidas implementation file", () => {
+  /*
+   * The order book — every article bought for the season, with the product
+   * detail the invoice does not carry. The two are joined by the sales order
+   * number, which the invoice calls "Original Sales Order".
+   */
+  function load() {
+    const wb = readWorkbook(readFileSync(ADIDAS_ORDER), "implementation.xlsx");
+    return pickStockSheet(wb);
+  }
+
+  test("is detected apart from the invoice", () => {
+    const parsed = parseStockSheet(load().rows);
+    assert.equal(parsed.source, "adidas-order");
+
+    const invoice = parseStockSheet(
+      pickStockSheet(readWorkbook(readFileSync(ADIDAS), "invoice.xlsx")).rows,
+    );
+    assert.equal(invoice.source, "adidas");
+  });
+
+  test("carries far more than the invoice does", () => {
+    const parsed = parseStockSheet(load().rows);
+    const articles = new Set(parsed.rows.map((r) => r.article_number));
+    // 23 articles in the template against the 5 the invoice shipped.
+    assert.equal(articles.size, 23);
+    assert.equal(parsed.rowsFailed, 0);
+  });
+
+  test("splits Article Name into a product name and a colourway", () => {
+    // SAP writes these as two fixed-width fields run together.
+    assert.deepEqual(splitArticleName("PERF TXT POLO       WHITE/MAROON"), {
+      name: "Perf Txt Polo",
+      colour: "White / Maroon",
+    });
+    assert.deepEqual(splitArticleName("ADI PERF H POLO     COLNAV"), {
+      name: "Adi Perf H Polo",
+      colour: "Colnav",
+    });
+    // A name with no colourway must not lose the name.
+    assert.deepEqual(splitArticleName("SOME ITEM"), {
+      name: "Some Item",
+      colour: "",
+    });
+  });
+
+  test("names, colours and fit come through", () => {
+    const parsed = parseStockSheet(load().rows);
+    const row = parsed.rows.find((r) => r.article_number === "HZ6891")!;
+    assert.equal(row.style_name, "Perf Txt Polo");
+    assert.equal(row.colour, "White / Maroon");
+    assert.equal(row.gender, "mens");
+    assert.equal(row.category, "polos");
+    assert.equal(row.needs_review, false);
+  });
+
+  test("category is inferred from the name, never guessed", () => {
+    assert.equal(categoryFromName("Perf Txt Polo"), "polos");
+    assert.equal(categoryFromName("Ult365 Sld Polo"), "polos");
+    // "M Bu Driver Hd" is not a vocabulary anyone can decode with confidence.
+    assert.equal(categoryFromName("M Bu Driver Hd"), null);
+
+    const parsed = parseStockSheet(load().rows);
+    const flagged = [
+      ...new Set(parsed.rows.filter((r) => r.needs_review).map((r) => r.article_number)),
+    ];
+    assert.deepEqual(flagged, ["KS2292", "KT2806"]);
+  });
+
+  test("no stock is taken from the template — that is the invoice's job", () => {
+    /*
+     * The load-bearing rule. This file is the product template; its quantity
+     * columns are order-book positions, not what is on the shelf. Taking stock
+     * from here would put units on the site that nobody can ship.
+     */
+    const parsed = parseStockSheet(load().rows);
+    assert.equal(
+      parsed.rows.reduce((n, r) => n + r.quantity, 0),
+      0,
+      "every row lands at zero",
+    );
+    assert.ok(parsed.rows.every((r) => r.quantity === 0));
+  });
+
+  test("a size appearing on two order lines becomes one SKU", () => {
+    // HZ6893 has two 2XL rows, one delivered and one cancelled. The template
+    // only cares that 2XL exists on the article.
+    const parsed = parseStockSheet(load().rows);
+    const twoXl = parsed.rows.filter(
+      (r) => r.article_number === "HZ6893" && r.size === "2XL",
+    );
+    assert.equal(twoXl.length, 1);
+  });
+
+  test("it defines the full size run each article comes in", () => {
+    const parsed = parseStockSheet(load().rows);
+    const run = parsed.rows
+      .filter((r) => r.article_number === "HZ6893")
+      .sort((a, b) => a.size_order - b.size_order)
+      .map((r) => r.size);
+    assert.deepEqual(run, ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL"]);
+  });
+
+  test("a cancelled line does not import a price of zero", () => {
+    // SAP writes an absent price as 0.00, which is not a price.
+    const parsed = parseStockSheet(load().rows);
+    const cancelled = parsed.rows.find((r) => r.article_number === "IS7344")!;
+    assert.equal(cancelled.cost_price, null);
+    assert.equal(cancelled.rrp, null);
+  });
+
+  test("cost stays out of the public price here too", () => {
+    const parsed = parseStockSheet(load().rows);
+    const row = parsed.rows.find((r) => r.article_number === "KS2292")!;
+    assert.equal(row.cost_price, 102.57);
+    assert.equal(row.rrp, 201.11);
+    assert.equal(row.price_wholesale, null);
+  });
+
+  test("the sales order links the two files", () => {
+    const order = parseStockSheet(load().rows);
+    const invoice = parseStockSheet(
+      pickStockSheet(readWorkbook(readFileSync(ADIDAS), "invoice.xlsx")).rows,
+    );
+    assert.deepEqual(order.orderNumbers, ["5052282932"]);
+    // The invoice bills against the same order, which is how a double-count
+    // is detected before it happens.
+    assert.deepEqual(invoice.orderNumbers, ["5052282932"]);
   });
 });
 

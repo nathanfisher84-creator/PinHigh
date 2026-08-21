@@ -118,4 +118,4 @@ missing.
 | Preview deployments are `noindex` | A preview must not compete with the live site in search results |
 | `EphemeralNotice` banner | Says plainly that writes are not kept |
 
-All 114 tests still pass and the production build is clean with `VERCEL=1` set.
+All 124 tests still pass and the production build is clean with `VERCEL=1` set.

@@ -11,7 +11,7 @@ import type { ParsedRow, RowIssue } from "./parse";
  * and there is a way back for 30 days.
  */
 
-export type ImportMode = "upsert" | "replace" | "add";
+export type ImportMode = "upsert" | "replace" | "add" | "set" | "details";
 
 export interface StockDiff {
   mode: ImportMode;
@@ -106,14 +106,22 @@ export function buildDiff(
   for (const v of existing.values()) unitsBefore += v.quantity;
   let unitsAfter = 0;
 
-  // A delivery adds to what is on the shelf; a stock take replaces it.
+  /*
+   * A delivery adds to what is on the shelf; a stock take replaces it; the
+   * product template touches no quantity at all.
+   */
   const adding = mode === "add";
-  if (adding) unitsAfter = unitsBefore;
+  const detailsOnly = mode === "details";
+  if (adding || detailsOnly) unitsAfter = unitsBefore;
 
   for (const row of rows) {
     const prior = existing.get(row.sku);
-    const after = adding ? (prior?.quantity ?? 0) + row.quantity : row.quantity;
-    unitsAfter += adding ? row.quantity : row.quantity;
+    const after = detailsOnly
+      ? (prior?.quantity ?? 0)
+      : adding
+        ? (prior?.quantity ?? 0) + row.quantity
+        : row.quantity;
+    if (!detailsOnly) unitsAfter += row.quantity;
 
     if (prior) {
       skusUpdated++;
@@ -144,10 +152,15 @@ export function buildDiff(
     }
   }
 
-  // In "add" mode nothing is absent — the delivery simply did not include it,
-  // which is not a reason to zero anything.
+  /*
+   * Neither "add" nor "set" treats a missing SKU as absent. A delivery simply
+   * did not include it, and an implementation file covers one order rather
+   * than the whole catalogue — in both cases zeroing everything else would be
+   * destroying stock the file says nothing about.
+   */
+  const leavesOthersAlone = mode === "add" || mode === "set" || mode === "details";
   const absent: AbsentSku[] = [];
-  for (const [sku, v] of adding ? [] : existing) {
+  for (const [sku, v] of leavesOthersAlone ? [] : existing) {
     if (inFile.has(sku)) continue;
     absent.push({
       sku,
@@ -243,6 +256,8 @@ export function commitImport(
     /** adidas invoice numbers applied here, so the same delivery cannot
      *  be counted into stock twice. */
     invoiceRefs?: string[];
+    /** adidas sales orders covered by this import. */
+    orderRefs?: string[];
   },
 ): CommitResult {
   const importId = uid();
@@ -376,19 +391,36 @@ export function commitImport(
           row.sku,
         );
         if (existingVariant) {
-          run(
-            mode === "add"
-              ? `UPDATE variants SET product_id = ?, size = ?, size_order = ?,
-                   quantity = quantity + ?, updated_at = ? WHERE id = ?`
-              : `UPDATE variants SET product_id = ?, size = ?, size_order = ?,
-                   quantity = ?, updated_at = ? WHERE id = ?`,
-            productId,
-            row.size,
-            row.size_order,
-            row.quantity,
-            timestamp,
-            existingVariant.id,
-          );
+          /*
+           * "details" is the product template: it may correct a size's
+           * ordering but must never move a quantity, because the invoice is
+           * the only thing that knows what is actually on the shelf.
+           */
+          if (mode === "details") {
+            run(
+              `UPDATE variants SET product_id = ?, size = ?, size_order = ?, updated_at = ?
+                WHERE id = ?`,
+              productId,
+              row.size,
+              row.size_order,
+              timestamp,
+              existingVariant.id,
+            );
+          } else {
+            run(
+              mode === "add"
+                ? `UPDATE variants SET product_id = ?, size = ?, size_order = ?,
+                     quantity = quantity + ?, updated_at = ? WHERE id = ?`
+                : `UPDATE variants SET product_id = ?, size = ?, size_order = ?,
+                     quantity = ?, updated_at = ? WHERE id = ?`,
+              productId,
+              row.size,
+              row.size_order,
+              row.quantity,
+              timestamp,
+              existingVariant.id,
+            );
+          }
           rowsUpdated++;
         } else {
           run(
@@ -411,7 +443,7 @@ export function commitImport(
     // Never delete a product row — quote history references it (§4.3).
     // Both modes zero the quantity; replace additionally hides the product so
     // it drops out of the catalogue without losing its history.
-    if (mode !== "add") {
+    if (mode !== "add" && mode !== "set" && mode !== "details") {
       for (const absent of diff.absent) {
         run(
           "UPDATE variants SET quantity = 0, updated_at = ? WHERE sku = ?",
@@ -440,8 +472,8 @@ export function commitImport(
       `INSERT INTO stock_imports (
          id, filename, storage_path, uploaded_by, mode,
          rows_total, rows_created, rows_updated, rows_zeroed, rows_failed,
-         error_log, snapshot_before, status, invoice_refs, created_at
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         error_log, snapshot_before, status, invoice_refs, order_refs, created_at
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       importId,
       meta.filename,
       meta.storagePath ?? null,
@@ -456,6 +488,7 @@ export function commitImport(
       JSON.stringify(snapshot),
       "committed",
       meta.invoiceRefs?.length ? JSON.stringify(meta.invoiceRefs) : null,
+      meta.orderRefs?.length ? JSON.stringify(meta.orderRefs) : null,
       timestamp,
     );
   });
