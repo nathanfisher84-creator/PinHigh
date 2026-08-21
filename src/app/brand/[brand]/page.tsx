@@ -95,7 +95,7 @@ export default async function BrandPage({
             }}
           />
         ) : (
-          <ul className="grid grid-cols-2 gap-x-6 gap-y-16 md:grid-cols-3 lg:grid-cols-4 lg:gap-x-10">
+          <ul className="grid grid-cols-2 gap-x-2 gap-y-8 md:grid-cols-3 lg:grid-cols-4">
             {cards.map((card, i) => (
               <li key={card.style_group ?? card.article_number}>
                 <ProductCard card={card} priority={i < 4} />
