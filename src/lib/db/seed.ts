@@ -226,16 +226,22 @@ function applyColourHex() {
 /**
  * Register the hero photograph that ships in the bundle.
  *
- * The renditions in `seed/images` are already encoded, so this only writes
- * database rows — no image processing happens at boot. That matters on Vercel,
- * where each instance starts with an empty /tmp and is frozen the moment it has
- * responded, so anything slow or deferred would simply never finish.
+ * The renditions live in `public/seed-images`, already encoded, so this only
+ * writes database rows — no image processing happens at boot. That matters on
+ * Vercel, where each instance starts with an empty /tmp and is frozen the
+ * moment it has responded, so anything deferred would never finish.
+ *
+ * They sit in `public` rather than beside the spreadsheets because Vercel
+ * serves that straight from the CDN. Routing them through the image function
+ * meant depending on output file tracing to include the files in *that*
+ * route's bundle, which it did not — the rows seeded but every photograph
+ * 404ed.
  *
  * One image per article. The full pack, with all five views, goes in through
  * Admin → Products.
  */
 function seedImages(): number {
-  const dir = path.join(process.cwd(), "seed", "images");
+  const dir = path.join(process.cwd(), "public", "seed-images");
   if (!existsSync(dir)) return 0;
 
   const existing = get<{ n: number }>("SELECT COUNT(*) AS n FROM product_images");
@@ -266,7 +272,9 @@ function seedImages(): number {
        VALUES (?,?,?,?,1,0)`,
       uid(),
       product.id,
-      `seed/${file}`,
+      // Absolute, so it is served as a static asset rather than through
+      // the image route. See the prefixing in repo/catalogue.ts.
+      `/seed-images/${file}`,
       defaultAltText(product.brand, product.style_name, product.colour),
     );
     added++;
