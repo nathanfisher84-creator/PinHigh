@@ -183,7 +183,7 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
       {/* Stage */}
       <div
         ref={stageRef}
-        className="studio relative aspect-[4/5] overflow-hidden"
+        className="relative aspect-[4/5] bg-paper-sunken hairline overflow-hidden"
       >
         {current ? (
           <Image
@@ -230,7 +230,7 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
               src={logo.dataUrl}
               alt=""
               draggable={false}
-              className="no-blend pointer-events-none h-auto w-full select-none drop-shadow-[0_1px_2px_rgba(20,24,26,0.25)]"
+              className="pointer-events-none h-auto w-full select-none drop-shadow-[0_1px_2px_rgba(20,24,26,0.25)]"
             />
           </button>
         )}

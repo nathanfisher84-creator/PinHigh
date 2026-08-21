@@ -29,25 +29,12 @@ export function ProductCard({ card, priority }: { card: CatalogueCard; priority?
 
   return (
     <article className="group">
-      {/* The technical label sits above the frame, like a catalogue index. */}
-      <p className="mono-ui mb-1 flex items-baseline justify-between gap-2">
-        <Link
-          href={`/product/${encodeURIComponent(colourway.article_number)}`}
-          className="truncate hover:underline underline-offset-2"
-        >
-          {card.style_name}
-        </Link>
-        <span className="tabular shrink-0 text-graphite-ink">
-          {colourway.article_number}
-        </span>
-      </p>
-
       <Link
         href={`/product/${encodeURIComponent(colourway.article_number)}`}
         className="block"
       >
-        <div className="studio relative aspect-[4/5] overflow-hidden">
-          <div className="absolute inset-0">
+        <div className="relative aspect-[4/5] overflow-hidden bg-paper-sunken">
+          <div className="absolute inset-0 transition-transform duration-[400ms] ease-[var(--ease-out-quiet)] group-hover:scale-[1.02] motion-reduce:transform-none">
             <ProductImage
               src={colourway.image}
               alt={`${card.style_name}${colourway.colour ? ` in ${colourway.colour}` : ""}`}
@@ -69,10 +56,26 @@ export function ProductCard({ card, priority }: { card: CatalogueCard; priority?
         </div>
       </Link>
 
-      <div className="mt-1.5">
-        <p className="mono-ui text-graphite-ink">
-          {colourway.colour || `Art. ${colourway.article_number}`}
-          {multi && ` · ${card.colourways.length} colours`}
+      <div className="mt-4">
+        {/* Rendered as the brand writes it — adidas is lowercase by design. */}
+        <p className="text-2xs font-semibold tracking-[0.09em] text-graphite-ink">
+          {card.brand}
+        </p>
+
+        <h3 className="mt-1.5 text-base leading-snug">
+          <Link
+            href={`/product/${encodeURIComponent(colourway.article_number)}`}
+            className="link-underline group-hover:link-underline-on"
+          >
+            {card.style_name}
+          </Link>
+        </h3>
+
+        <p className="mt-1 text-sm text-graphite-ink">
+          {colourway.colour || (
+            <span className="tabular">Art. {colourway.article_number}</span>
+          )}
+          {multi && <span className="tabular"> · {card.colourways.length} colours</span>}
         </p>
 
         {multi && (
@@ -108,7 +111,7 @@ export function ProductCard({ card, priority }: { card: CatalogueCard; priority?
           </div>
         )}
 
-        <p className="mono-ui mt-2 text-graphite-ink">{PRICE_ON_REQUEST}</p>
+        <p className="mt-3 text-sm text-graphite-ink">{PRICE_ON_REQUEST}</p>
       </div>
     </article>
   );

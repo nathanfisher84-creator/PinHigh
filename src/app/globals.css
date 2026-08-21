@@ -18,7 +18,7 @@
      green #5CB947, red #D93A2B. Navy is the corporate voice — text, grounds,
      structure. Green is the action and the good news: buttons, links, stock.
      Red stays what it always was: low stock and destructive actions only. -- */
-  --color-paper: #ffffff; /* the reference's canvas: plain paper white */
+  --color-paper: #fafaf8; /* clean near-white ground, cool not cream */
   --color-ink: #16233b; /* brand navy-black, all body text */
   --color-graphite: #5d6675; /* rules, dividers, large labels — navy-cast */
   --color-fairway: #2f7d22; /* primary actions, in stock — the logo green,
@@ -38,10 +38,6 @@
   /* Tints, derived. Used for surfaces and state washes, never decoration. */
   --color-paper-raised: #ffffff;
   --color-paper-sunken: #f1f2ef;
-  /* The uniform studio-grey ground product photography sits on (B-Line
-     architecture). Supplier shots are on white; rendered with
-     mix-blend-multiply they melt into this ground like a studio backdrop. */
-  --color-studio: #b9bbb8;
   --color-sand-soft: #e9eae5;
   --color-fairway-wash: #edf6ea;
   --color-flag-wash: #fcefed;
@@ -316,40 +312,4 @@
 }
 @utility link-underline-on {
   background-size: 100% 1px;
-}
-
-/* ---------------------------------------------------------------------------
-   B-Line architecture utilities
-
-   The technical-catalogue register: monospace for everything that names or
-   counts, ink frames instead of shadows, a continuous grid, photography on a
-   uniform studio ground. Navy stands where the reference uses black; green
-   survives only as the single interactive accent.
-   ------------------------------------------------------------------------ */
-
-/* Mono label voice - nav links, product names, filters, metadata. */
-@utility mono-ui {
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  line-height: 1.3;
-  letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-/* The studio cell a product photograph lives in. */
-@utility studio {
-  background-color: var(--color-studio);
-  border: 1px solid var(--color-ink);
-  border-radius: 0;
-}
-
-.studio img:not(.no-blend) {
-  mix-blend-mode: multiply;
-}
-
-/* Boxed active state - the reference marks the current filter with a thin
-   rectangle around the word, nothing else. */
-@utility boxed {
-  outline: 1px solid var(--color-ink);
-  outline-offset: 3px;
 }

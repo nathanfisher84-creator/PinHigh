@@ -72,7 +72,7 @@ export function SiteHeader({ categories, genders, stockDate, announcement }: Pro
 
             <nav
               aria-label="Main"
-              className="mono-ui hidden lg:flex items-center gap-8"
+              className="hidden lg:flex items-center gap-9 text-sm"
             >
               <CatalogueMenu categories={categories} genders={genders} />
 

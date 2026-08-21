@@ -32,7 +32,7 @@ export function OrderRail() {
 
   return (
     <div
-      className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-ink bg-paper-raised"
+      className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-sand bg-paper-raised shadow-rail"
       role="region"
       aria-label="Your order so far"
     >
