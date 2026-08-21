@@ -14,6 +14,18 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/**": ["./seed/**"],
   },
+  experimental: {
+    /*
+     * Image and stock uploads travel through Server Actions, whose body limit
+     * defaults to 1 MB — far too small for a zip of supplier photographs.
+     *
+     * Note for Vercel: the platform caps a serverless request body at 4.5 MB
+     * regardless of this setting, so large packs must be uploaded in batches
+     * there, or routed straight to blob storage with a signed URL. Self-hosted
+     * and local development get the full allowance.
+     */
+    serverActions: { bodySizeLimit: "25mb" },
+  },
   images: {
     formats: ["image/webp"],
     deviceSizes: [400, 800, 1600],

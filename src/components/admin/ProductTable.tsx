@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Fragment, useState, useTransition } from "react";
 import { saveProduct, setProductVisibility } from "@/app/admin/actions";
 import type { AdminProductRow } from "@/app/admin/(protected)/products/page";
+import type { ProductImageRow } from "@/lib/repo/images";
+import { ImageManager } from "./ImageManager";
 import { amount } from "@/lib/format";
 import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
 
@@ -14,7 +16,13 @@ import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
  * owner's common task is correcting one price or hiding one colourway, and a
  * round trip per edit is what makes an admin panel feel like a chore.
  */
-export function ProductTable({ products }: { products: AdminProductRow[] }) {
+export function ProductTable({
+  products,
+  imagesByProduct,
+}: {
+  products: AdminProductRow[];
+  imagesByProduct: Record<string, ProductImageRow[]>;
+}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -229,6 +237,15 @@ export function ProductTable({ products }: { products: AdminProductRow[] }) {
                             rows={3}
                             defaultValue={p.description ?? ""}
                             className="w-full hairline bg-paper-raised px-3 py-2 text-sm focus:outline-none focus:border-fairway"
+                          />
+                        </div>
+
+                        <div className="lg:col-span-4 rule pt-4">
+                          <p className="label-caps mb-2">Photos</p>
+                          <ImageManager
+                            productId={p.id}
+                            articleNumber={p.article_number}
+                            images={imagesByProduct[p.id] ?? []}
                           />
                         </div>
 

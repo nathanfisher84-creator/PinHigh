@@ -1,10 +1,19 @@
 # Deploying to Vercel
 
-The app is ready to deploy — the Vercel-specific work is done (see "What was
-changed" below). What remains needs your Vercel account, which I can't sign
-into on your behalf.
+**This is already deployed.** `nathanfisher84-creator/PinHigh` is connected to
+the Vercel project, so every push to `main` redeploys automatically. The rest
+of this file covers how it was set up, what it cannot do yet, and how to open
+the admin panel.
 
-## The fastest route — two commands
+## Redeploying
+
+Just push. Vercel builds from `main`.
+
+```bash
+git push
+```
+
+## Deploying somewhere else
 
 From `pinhigh/`:
 
@@ -52,7 +61,12 @@ wiped when that instance recycles. So on Vercel:
   bundled stock file on cold start — 71 articles, 311 SKUs, real stock figures.
 - **Writes do not survive.** A submitted quote request gets a reference and
   renders its confirmation, but it lands in one instance's temporary database
-  and the sales team will never see it.
+  and the sales team will never see it. The same applies to uploaded product
+  photographs and stock imports.
+- **Uploads are capped at 4.5 MB on Vercel** regardless of the app's own limit,
+  because that is the platform's serverless request-body ceiling. Bulk image
+  packs need to go in small batches there, or straight to blob storage with a
+  signed URL.
 
 The site says so itself: a red banner appears at the top of every page on any
 deployment without a real database. Letting a buyer believe an enquiry had
@@ -104,4 +118,4 @@ missing.
 | Preview deployments are `noindex` | A preview must not compete with the live site in search results |
 | `EphemeralNotice` banner | Says plainly that writes are not kept |
 
-All 80 tests still pass and the production build is clean with `VERCEL=1` set.
+All 99 tests still pass and the production build is clean with `VERCEL=1` set.

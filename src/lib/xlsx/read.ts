@@ -1,4 +1,4 @@
-import { inflateRawSync } from "node:zlib";
+import { readZip, ZipError } from "@/lib/zip";
 
 /**
  * Read-only XLSX / CSV parser (spec §4.1).
@@ -25,68 +25,6 @@ export interface SheetData {
 
 export interface WorkbookData {
   sheets: SheetData[];
-}
-
-/* -------------------------------------------------------------------------
-   Zip container
-   ---------------------------------------------------------------------- */
-
-interface ZipEntry {
-  name: string;
-  data: Buffer;
-}
-
-const SIG_EOCD = 0x06054b50;
-const SIG_CENTRAL = 0x02014b50;
-
-function readZip(buf: Buffer): Map<string, Buffer> {
-  const entries = new Map<string, Buffer>();
-
-  // Find the End Of Central Directory record by scanning back from the tail.
-  // The comment field is at most 65535 bytes, so the search window is bounded.
-  let eocd = -1;
-  const minEocd = Math.max(0, buf.length - 65_557);
-  for (let i = buf.length - 22; i >= minEocd; i--) {
-    if (buf.readUInt32LE(i) === SIG_EOCD) {
-      eocd = i;
-      break;
-    }
-  }
-  if (eocd === -1) throw new SpreadsheetError("That file isn't a readable .xlsx workbook.");
-
-  const entryCount = buf.readUInt16LE(eocd + 10);
-  let ptr = buf.readUInt32LE(eocd + 16);
-
-  for (let i = 0; i < entryCount; i++) {
-    if (ptr + 46 > buf.length || buf.readUInt32LE(ptr) !== SIG_CENTRAL) break;
-
-    const method = buf.readUInt16LE(ptr + 10);
-    const compressedSize = buf.readUInt32LE(ptr + 20);
-    const nameLen = buf.readUInt16LE(ptr + 28);
-    const extraLen = buf.readUInt16LE(ptr + 30);
-    const commentLen = buf.readUInt16LE(ptr + 32);
-    const localOffset = buf.readUInt32LE(ptr + 42);
-    const name = buf.toString("utf8", ptr + 46, ptr + 46 + nameLen);
-
-    // Walk to the local header to find where the payload actually starts —
-    // the local extra field is often a different length to the central one.
-    if (localOffset + 30 <= buf.length) {
-      const lNameLen = buf.readUInt16LE(localOffset + 26);
-      const lExtraLen = buf.readUInt16LE(localOffset + 28);
-      const start = localOffset + 30 + lNameLen + lExtraLen;
-      const raw = buf.subarray(start, start + compressedSize);
-      try {
-        entries.set(name, method === 0 ? Buffer.from(raw) : inflateRawSync(raw));
-      } catch {
-        // A part we cannot inflate is skipped rather than fatal — it may well
-        // be a thumbnail or a drawing the importer never looks at.
-      }
-    }
-
-    ptr += 46 + nameLen + extraLen + commentLen;
-  }
-
-  return entries;
 }
 
 /* -------------------------------------------------------------------------
@@ -343,7 +281,16 @@ export function readWorkbook(buf: Buffer, filename: string): WorkbookData {
     );
   }
 
-  const zip = readZip(buf);
+  // A zip failure here means the file isn't a workbook at all. Rethrow it as a
+  // SpreadsheetError so callers keep catching one error type.
+  let zip: Map<string, Buffer>;
+  try {
+    zip = readZip(buf, "That file isn't a readable .xlsx workbook.");
+  } catch (err) {
+    throw err instanceof ZipError
+      ? new SpreadsheetError(err.message)
+      : err;
+  }
 
   const workbookXml = zip.get("xl/workbook.xml")?.toString("utf8");
   if (!workbookXml) {

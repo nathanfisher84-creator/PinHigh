@@ -11,7 +11,7 @@ Built to `pinhigh-catalogue-spec.md`. Section references throughout the code
 ```bash
 npm install
 npm run dev     # http://localhost:3400
-npm test        # 80 tests
+npm test        # 99 tests
 ```
 
 The catalogue seeds itself on first run from `seed/pinhigh-stock-template.xlsx`
@@ -30,7 +30,7 @@ are done, plus most of 6.
 | 1 · Foundation — scaffold, schema, design tokens, layout, admin auth | Built |
 | 2 · Catalogue — listing, filters, search, product page, size grid, basket | Built |
 | 3 · Import — parse, column mapping, diff preview, commit, history, rollback | Built |
-| 4 · Images — pipeline and management UI | **Partial** — see below |
+| 4 · Images — upload, processing pipeline, bulk zip matcher, management UI | Built |
 | 5 · Quote requests — submission, validation, persistence, email, admin | Built |
 | 6 · Branding — per-line toggle, placements, logo upload, admin surfacing | Built |
 | 7 · WhatsApp — Cloud API, template, test tooling, retry | Code complete, unverified |
@@ -40,13 +40,6 @@ are done, plus most of 6.
 ### Known gaps
 
 These are deliberate stopping points, not oversights.
-
-**Images (§5) are plumbed but not complete.** Products render the branded
-placeholder §5 requires, alt text is auto-generated, and the admin lists which
-products lack images. What is not built: the upload UI, the WebP/multi-width
-processing pipeline, and the bulk-zip matcher that pairs `41001_1.jpg` to an
-article number. That last one is the piece worth doing first — §5 is right that
-it saves the owner hours and works directly with supplier image packs.
 
 **WhatsApp (§7.3) cannot be verified without a Meta account.** The integration
 is written — template parameters, the URL button, retry with backoff, the test
@@ -82,12 +75,14 @@ src/
     domain/               types, size ordering
     import/               columns (fuzzy matching) · parse (validation) · commit (diff, write, rollback)
     xlsx/read.ts          zero-dependency XLSX + CSV reader
+    zip.ts                shared zip reader (xlsx and image packs)
+    images/               match (filename -> article) · process (webp, resize, EXIF) · storage
     repo/                 catalogue and quote queries
     notify/               email, whatsapp, csv
     cart/store.ts         localStorage basket, keyed by SKU
     redirects.ts          the Shopify redirect map (§14.3)
 supabase/migrations/      Postgres schema + RLS (the §2 target)
-tests/                    80 tests, node:test, no test framework dependency
+tests/                    99 tests, node:test, no test framework dependency
 ```
 
 ### Two decisions that depart from the spec
@@ -157,6 +152,39 @@ defensive code in the project.
   the same transaction as the write.
 
 ---
+
+## Images
+
+Built to §5, and sharing the zip reader with the stock importer.
+
+- **Bulk zip upload.** Drop a zipped folder of supplier photographs and they
+  land on the right products. Filenames are matched to article numbers —
+  `41001_1.jpg`, `41001_2.jpg`, or a bare `41001.jpg` — against the article
+  numbers that actually exist, never by parsing the filename and hoping. That
+  matters because an article number is an opaque string and may contain the
+  very separators a naive parser would split on: `ULT365-STRIPE-M_2.jpg`
+  resolves correctly.
+- **It refuses to guess.** `41001-NAVY.jpg` does *not* get filed under article
+  41001 — that is a different colourway, and attaching a navy photograph to the
+  white product is worse than not matching at all. It is reported instead.
+- **A preview before anything is written**, listing what matched, what did not
+  and why, and which products will still have no photo afterwards. The same
+  shape as the stock import, because the owner has already learned that screen.
+- **Windows zips work.** PowerShell's Compress-Archive writes backslash path
+  separators rather than the forward slashes the zip spec calls for. Before
+  that was handled, every photo inside a sub-folder silently failed to match.
+  There is a regression test with a hand-built zip.
+- **Processing**: converted to WebP at 400/800/1600, never upscaled beyond the
+  source, and all EXIF stripped — supplier photographs routinely carry GPS
+  coordinates and photographer names.
+- macOS resource forks (`__MACOSX/`, `._name`) and `Thumbs.db` are dropped
+  rather than reported as unmatched, so the list that needs attention stays
+  short.
+
+Per product, the admin has drag-and-drop upload, reordering, a primary
+selection and editable alt text. Reordering uses explicit move buttons rather
+than pointer dragging — that version works by keyboard and on a tablet, which
+§11 assumes.
 
 ## The size grid
 

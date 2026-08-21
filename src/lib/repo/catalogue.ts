@@ -103,7 +103,7 @@ function fetchCards(where: string, params: unknown[]): JoinedRow[] {
   return all<JoinedRow>(
     `SELECT p.*,
             COALESCE(v.total_quantity, 0) AS total_quantity,
-            img.storage_path AS image,
+            '/images/' || img.storage_path AS image,
             COALESCE(v.sizes_json, '[]') AS sizes_json
        FROM products p
        LEFT JOIN (
@@ -338,7 +338,7 @@ export function getProductByArticle(
         `SELECT p.article_number, p.colour, p.colour_hex,
                 COALESCE((SELECT SUM(quantity) FROM variants v WHERE v.product_id = p.id), 0)
                   AS total_quantity,
-                (SELECT storage_path FROM product_images i
+                (SELECT '/images/' || storage_path FROM product_images i
                   WHERE i.product_id = p.id
                   ORDER BY i.is_primary DESC, i.sort_order ASC LIMIT 1) AS primary_image
            FROM products p
@@ -391,7 +391,7 @@ export function getColourwayRuns(product: ProductWithVariants): ColourwayRun[] {
       p.id,
     );
     const image = get<{ storage_path: string }>(
-      `SELECT storage_path FROM product_images WHERE product_id = ?
+      `SELECT '/images/' || storage_path AS storage_path FROM product_images WHERE product_id = ?
         ORDER BY is_primary DESC, sort_order ASC LIMIT 1`,
       p.id,
     );

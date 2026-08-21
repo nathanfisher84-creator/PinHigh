@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { all } from "@/lib/db";
 import { ProductTable } from "@/components/admin/ProductTable";
+import { BulkImageUpload } from "@/components/admin/BulkImageUpload";
+import type { ProductImageRow } from "@/lib/repo/images";
 import { CATEGORIES, CATEGORY_LABELS, type Category } from "@/lib/domain/types";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +73,16 @@ export default async function AdminProductsPage({
     ...args,
   );
 
+  // One query for every image, grouped in memory. The catalogue is a few
+  // hundred styles (§15.1), so this is cheaper than a query per row.
+  const imageRows = all<ProductImageRow>(
+    "SELECT * FROM product_images ORDER BY is_primary DESC, sort_order ASC",
+  );
+  const imagesByProduct: Record<string, ProductImageRow[]> = {};
+  for (const row of imageRows) {
+    (imagesByProduct[row.product_id] ??= []).push(row);
+  }
+
   const withoutImages = products.filter((p) => p.image_count === 0).length;
 
   return (
@@ -81,14 +93,18 @@ export default async function AdminProductsPage({
         and are edited there, not here.
       </p>
 
-      {withoutImages > 0 && (
-        <p className="mt-4 hairline bg-paper-raised px-4 py-3 text-sm">
-          <strong className="tabular">{withoutImages}</strong> products have no
-          image yet. Name your photos after the article number —{" "}
-          <span className="tabular">41001_1.jpg</span> — and a whole folder
-          uploads at once.
-        </p>
-      )}
+      <section className="mt-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-3 mb-3">
+          <h2 className="text-lg">Add photos in bulk</h2>
+          {withoutImages > 0 && (
+            <p className="text-sm text-graphite-ink">
+              <strong className="tabular">{withoutImages}</strong>{" "}
+              {withoutImages === 1 ? "product has" : "products have"} no photo yet
+            </p>
+          )}
+        </div>
+        <BulkImageUpload />
+      </section>
 
       <form method="get" className="mt-6 flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-48">
@@ -153,7 +169,7 @@ export default async function AdminProductsPage({
       </p>
 
       <div className="mt-4">
-        <ProductTable products={products} />
+        <ProductTable products={products} imagesByProduct={imagesByProduct} />
       </div>
     </div>
   );
