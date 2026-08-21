@@ -1,0 +1,21 @@
+# dependencies
+/node_modules
+
+# next
+/.next
+/out
+next-env.d.ts
+*.tsbuildinfo
+
+# local data store, uploads and customer artwork.
+# .data/private holds customers' trademarks — it must never reach a repo.
+/.data
+
+# environment
+.env
+.env.local
+.env*.local
+
+# os
+.DS_Store
+Thumbs.db
