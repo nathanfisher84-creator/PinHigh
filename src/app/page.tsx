@@ -39,7 +39,9 @@ export default async function HomePage() {
   const stockDate = await getStockAsAt();
   const totals = await getCatalogueTotals();
   const featured = (await listCatalogue({ inStockOnly: true, sort: "stock" })).slice(0, 4);
-  const liveCategories = FEATURED.filter(async (c) => (counts.get(c) ?? 0) > 0);
+  // A sync predicate: an async one returns a Promise, which is always
+  // truthy, so every category showed even with zero stock.
+  const liveCategories = FEATURED.filter((c) => (counts.get(c) ?? 0) > 0);
 
   return (
     <>
