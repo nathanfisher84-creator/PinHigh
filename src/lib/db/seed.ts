@@ -294,40 +294,72 @@ async function seedImages(): Promise<number> {
   const dir = path.join(process.cwd(), "public", "seed-images");
   if (!existsSync(dir)) return 0;
 
-  const existing = await get<{ n: number }>("SELECT COUNT(*) AS n FROM product_images");
-  if ((existing?.n ?? 0) > 0) return 0;
-
-  // Largest rendition per article: `HZ6891-800.webp`.
-  const widest = new Map<string, { file: string; width: number }>();
+  // Every view per article: `HZ6891-1-800.webp`, `HZ6891-2-800.webp`, …
+  // in supplier view order (Standard View first — see scripts/process-zip.ts).
+  const byArticle = new Map<string, { file: string; view: number }[]>();
   for (const file of readdirSync(dir)) {
-    const m = file.match(/^([A-Za-z0-9]+)-(\d+)\.webp$/);
+    const m = file.match(/^([A-Za-z0-9]+)-(\d+)-800\.webp$/);
     if (!m) continue;
-    const [, article, width] = m;
-    const seen = widest.get(article);
-    if (!seen || Number(width) > seen.width) {
-      widest.set(article, { file, width: Number(width) });
-    }
+    const [, article, view] = m;
+    const bucket = byArticle.get(article) ?? [];
+    bucket.push({ file, view: Number(view) });
+    byArticle.set(article, bucket);
   }
 
+  // Idempotent by storage_path, so a database seeded before all the angles
+  // existed gains the missing ones on the next boot — and a re-run changes
+  // nothing. Owner-uploaded images are untouched: only /seed-images paths
+  // are ever written here.
+  const onDisk = new Set(readdirSync(dir).map((f) => `/seed-images/${f}`));
+  const stale = (
+    await all<{ id: string; storage_path: string }>(
+      "SELECT id, storage_path FROM product_images WHERE storage_path LIKE '/seed-images/%'",
+    )
+  ).filter((r) => !onDisk.has(r.storage_path));
+  for (const row of stale) {
+    await run("DELETE FROM product_images WHERE id = ?", row.id);
+  }
+
+  const registered = new Set(
+    (
+      await all<{ storage_path: string }>(
+        "SELECT storage_path FROM product_images WHERE storage_path LIKE '/seed-images/%'",
+      )
+    ).map((r) => r.storage_path),
+  );
+
   let added = 0;
-  for (const [article, { file }] of widest) {
+  for (const [article, views] of byArticle) {
     const product = await get<{ id: string; brand: string; style_name: string; colour: string }>(
       "SELECT id, brand, style_name, colour FROM products WHERE article_number = ?",
       article,
     );
     if (!product) continue;
 
-    await run(
-      `INSERT INTO product_images (id, product_id, storage_path, alt_text, is_primary, sort_order)
-       VALUES (?,?,?,?,1,0)`,
-      uid(),
+    const hasPrimary = await get(
+      "SELECT 1 FROM product_images WHERE product_id = ? AND is_primary = 1",
       product.id,
-      // Absolute, so it is served as a static asset rather than through
-      // the image route. See the prefixing in repo/catalogue.ts.
-      `/seed-images/${file}`,
-      defaultAltText(product.brand, product.style_name, product.colour),
     );
-    added++;
+
+    views.sort((a, b) => a.view - b.view);
+    for (const { file, view } of views) {
+      const storagePath = `/seed-images/${file}`;
+      if (registered.has(storagePath)) continue;
+
+      await run(
+        `INSERT INTO product_images (id, product_id, storage_path, alt_text, is_primary, sort_order)
+         VALUES (?,?,?,?,?,?)`,
+        uid(),
+        product.id,
+        // Absolute, so it is served as a static asset rather than through
+        // the image route. See the prefixing in repo/catalogue.ts.
+        storagePath,
+        defaultAltText(product.brand, product.style_name, product.colour),
+        !hasPrimary && view === 1 ? 1 : 0,
+        view - 1,
+      );
+      added++;
+    }
   }
   return added;
 }
@@ -345,7 +377,7 @@ export async function ensureSeeded(): Promise<void> {
     await seedRecipients();
     const seeded = await seedCatalogue();
 
-    if (seeded) await seedImages();
+    await seedImages();
 
     // Backfill for databases seeded before run completion existed, and for
     // articles that first arrived on a partial invoice. Idempotent and cheap.

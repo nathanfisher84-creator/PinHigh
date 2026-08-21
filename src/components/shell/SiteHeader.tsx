@@ -128,7 +128,7 @@ export function SiteHeader({ categories, genders, stockDate, announcement }: Pro
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-expanded={menuOpen}
                 aria-controls="mobile-menu"
-                className="lg:hidden label-caps text-ink"
+                className="lg:hidden label-caps text-ink -m-3 p-3"
               >
                 {menuOpen ? "Close" : "Menu"}
               </button>

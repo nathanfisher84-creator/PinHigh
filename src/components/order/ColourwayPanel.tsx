@@ -68,7 +68,7 @@ export function ColourwayPanel({ runs, initialArticle, brand, styleName }: Props
 
   return (
     <div>
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid gap-8 lg:grid-cols-2 [&>*]:min-w-0">
         <ProductStage
           key={active.article_number}
           images={active.images}

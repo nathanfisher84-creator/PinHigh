@@ -183,7 +183,7 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
       {/* Stage */}
       <div
         ref={stageRef}
-        className="relative aspect-[4/5] bg-paper-sunken hairline overflow-hidden touch-none"
+        className="relative aspect-[4/5] bg-paper-sunken hairline overflow-hidden"
       >
         {current ? (
           <Image
@@ -216,7 +216,7 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
             onPointerMove={onLogoPointerMove}
             onPointerUp={onLogoPointerUp}
             onKeyDown={onLogoKeyDown}
-            className="absolute z-20 cursor-grab active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-fairway"
+            className="absolute z-20 touch-none cursor-grab active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-fairway"
             style={{
               left: `${logo.x * 100}%`,
               top: `${logo.y * 100}%`,
@@ -277,7 +277,7 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
               />
             </label>
             <span className="text-xs text-graphite-ink">Drag it anywhere on the photo.</span>
-            <label className="cursor-pointer text-xs underline underline-offset-2">
+            <label className="cursor-pointer text-xs underline underline-offset-2 -m-2 p-2">
               Replace
               <input
                 type="file"
@@ -289,7 +289,7 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
             <button
               type="button"
               onClick={clearLogo}
-              className="text-xs text-graphite-ink underline underline-offset-2 hover:text-flag-ink"
+              className="text-xs text-graphite-ink underline underline-offset-2 hover:text-flag-ink -m-2 p-2"
             >
               Remove
             </button>

@@ -42,19 +42,19 @@ export function SiteFooter({
           <div className="grid grid-cols-2 gap-x-12 gap-y-8 sm:grid-cols-3 lg:gap-x-16">
             <nav aria-label="Catalogue">
               <h2 className="label-caps text-on-fairway-dim mb-4">Catalogue</h2>
-              <ul className="space-y-2.5 text-sm">
+              <ul className="space-y-1 text-sm">
                 {categories.slice(0, 5).map((c) => (
                   <li key={c.value}>
                     <Link
                       href={`/catalogue/${c.value}`}
-                      className="link-underline hover:link-underline-on"
+                      className="link-underline hover:link-underline-on inline-block py-1"
                     >
                       {CATEGORY_LABELS[c.value as Category] ?? c.label}
                     </Link>
                   </li>
                 ))}
                 <li>
-                  <Link href="/catalogue" className="link-underline hover:link-underline-on">
+                  <Link href="/catalogue" className="link-underline hover:link-underline-on inline-block py-1">
                     Everything
                   </Link>
                 </li>
@@ -65,22 +65,22 @@ export function SiteFooter({
               <h2 className="label-caps text-on-fairway-dim mb-4">Company</h2>
               <ul className="space-y-2.5 text-sm">
                 <li>
-                  <Link href="/about" className="link-underline hover:link-underline-on">
+                  <Link href="/about" className="link-underline hover:link-underline-on inline-block py-1">
                     About
                   </Link>
                 </li>
                 <li>
-                  <Link href="/contact" className="link-underline hover:link-underline-on">
+                  <Link href="/contact" className="link-underline hover:link-underline-on inline-block py-1">
                     Contact
                   </Link>
                 </li>
                 <li>
-                  <Link href="/terms" className="link-underline hover:link-underline-on">
+                  <Link href="/terms" className="link-underline hover:link-underline-on inline-block py-1">
                     Terms
                   </Link>
                 </li>
                 <li>
-                  <Link href="/privacy" className="link-underline hover:link-underline-on">
+                  <Link href="/privacy" className="link-underline hover:link-underline-on inline-block py-1">
                     Privacy
                   </Link>
                 </li>
