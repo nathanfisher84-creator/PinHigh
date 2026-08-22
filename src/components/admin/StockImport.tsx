@@ -448,30 +448,30 @@ export function StockImport() {
               </label>
             )}
 
-            {isInvoice && (
-              <label className="mb-2 flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
-                <input
-                  type="radio"
-                  name="mode"
-                  value="add"
-                  checked={mode === "add"}
-                  onChange={() => {
-                    setMode("add");
-                    if (fileRef.current) upload(fileRef.current, mapping);
-                  }}
-                  className="mt-1 accent-[var(--color-fairway)]"
-                />
-                <span>
-                  <strong>Add this delivery to stock</strong>{" "}
+            <label className="mb-2 flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
+              <input
+                type="radio"
+                name="mode"
+                value="add"
+                checked={mode === "add"}
+                onChange={() => {
+                  setMode("add");
+                  if (fileRef.current) upload(fileRef.current, mapping);
+                }}
+                className="mt-1 accent-[var(--color-fairway)]"
+              />
+              <span>
+                <strong>Add this delivery to stock</strong>{" "}
+                {isInvoice && (
                   <span className="text-xs text-graphite-ink">(recommended)</span>
-                  <span className="block text-sm text-graphite-ink">
-                    Quantities are added to what is already on the shelf. Sizes
-                    not on this invoice are left exactly as they are. This is what
-                    you want when adidas have sent you a shipment.
-                  </span>
+                )}
+                <span className="block text-sm text-graphite-ink">
+                  {isInvoice
+                    ? "Quantities are added to what is already on the shelf. Sizes not on this invoice are left exactly as they are. This is what you want when adidas have sent you a shipment."
+                    : "Quantities are added on top of what is already on the shelf — for a delivery that arrived outside the adidas files. Don't use this for a stock count: adding a full count would double everything."}
                 </span>
-              </label>
-            )}
+              </span>
+            </label>
 
             <label className="flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
               <input
@@ -488,11 +488,13 @@ export function StockImport() {
               <span>
                 <strong>Set quantities to this file</strong>
                 {!isInvoice && (
-                  <span className="text-xs text-graphite-ink"> (recommended)</span>
+                  <span className="text-xs text-graphite-ink"> (recommended for a stock count)</span>
                 )}
                 <span className="block text-sm text-graphite-ink">
-                  Sizes in this file are updated. Sizes not in it go to 0 but stay
-                  on the site, ready to come back.
+                  The shelf becomes exactly what this file says — right for a
+                  full stock count or report. Sizes in this file are updated;
+                  sizes not in it go to 0 but stay on the site, ready to come
+                  back.
                 </span>
               </span>
             </label>
