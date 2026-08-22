@@ -32,9 +32,18 @@ export function StockImport() {
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const detailsInputRef = useRef<HTMLInputElement>(null);
+  /** Which upload button the file came through. The detector still reads the
+   *  columns; intent lets a mixed-up file be refused instead of guessed at. */
+  const intentRef = useRef<"stock" | "details" | null>(null);
 
-  const upload = (file: File, overrideMapping?: Record<string, number>) => {
+  const upload = (
+    file: File,
+    overrideMapping?: Record<string, number>,
+    intent?: "stock" | "details",
+  ) => {
     fileRef.current = file;
+    if (intent) intentRef.current = intent;
     setResult(null);
     startTransition(async () => {
       const formData = new FormData();
@@ -44,6 +53,26 @@ export function StockImport() {
         formData.set("mapping", JSON.stringify(overrideMapping));
       }
       const result = await previewStockFile(formData);
+
+      /*
+       * The two buttons declare intent; the column fingerprint says what the
+       * file actually is. When they disagree, refuse politely rather than
+       * proceed on either guess — this is the mix-up the two buttons exist
+       * to stop.
+       */
+      const detected = result.source === "adidas-order" ? "details" : "stock";
+      if (result.ok && intentRef.current && intentRef.current !== detected) {
+        setPreview(null);
+        setResult({
+          ok: false,
+          message:
+            intentRef.current === "details"
+              ? "That reads as a stock file, not the implementation file. Nothing was imported — use the “Upload stock” button and its quantities will go on properly."
+              : "That is the adidas implementation file — it carries product details, never quantities. Nothing was imported — use the “Implementation file” button instead.",
+        });
+        return;
+      }
+
       setPreview(result);
       /*
        * Each adidas file has one sensible default. The implementation file
@@ -80,47 +109,81 @@ export function StockImport() {
 
   return (
     <div>
-      {/* Drop zone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          const file = e.dataTransfer.files?.[0];
-          if (file) upload(file);
-        }}
-        className={[
-          "hairline px-6 py-10 text-center transition-colors duration-150",
-          dragging ? "border-fairway bg-fairway-wash" : "bg-paper-raised",
-        ].join(" ")}
-      >
-        <p className="font-medium">Drop your adidas file here</p>
-        <p className="mt-1 text-sm text-graphite-ink max-w-xl mx-auto">
-          Either file adidas send you, exactly as it arrives. The{" "}
-          <strong>implementation file</strong> carries the product detail and
-          what has been delivered — that is the one that builds the catalogue.
-          An <strong>invoice</strong> records a single shipment. A stock sheet in
-          the Pin High template works too. .xlsx, .xls or .csv, up to 10 MB.
-        </p>
-        <label className="mt-4 inline-block">
-          <span className="cursor-pointer bg-fairway px-4 py-2 text-sm text-paper hover:bg-ink transition-colors duration-150 inline-block">
-            Choose a file
-          </span>
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv,.tsv"
-            className="sr-only"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) upload(file);
-            }}
-          />
-        </label>
+      {/* Two doors, so intent is declared before the file is even read.
+          A stock file through the implementation door (or vice versa) is
+          refused with directions, never guessed at. */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) upload(file, undefined, "stock");
+          }}
+          className={[
+            "hairline px-6 py-8 text-center transition-colors duration-150",
+            dragging ? "border-fairway bg-fairway-wash" : "bg-paper-raised",
+          ].join(" ")}
+        >
+          <p className="font-medium">Upload stock</p>
+          <p className="mt-1 text-sm text-graphite-ink">
+            Quantities coming in or being corrected: an <strong>adidas
+            invoice</strong>, or your own sheet with article, size and
+            quantity. .xlsx, .xls or .csv, up to 10 MB.
+          </p>
+          <label className="mt-4 inline-block">
+            <span className="cursor-pointer bg-fairway px-4 py-2 text-sm text-paper hover:bg-ink transition-colors duration-150 inline-block">
+              Choose stock file
+            </span>
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,.tsv"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) upload(file, undefined, "stock");
+              }}
+            />
+          </label>
+        </div>
+
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const file = e.dataTransfer.files?.[0];
+            if (file) upload(file, undefined, "details");
+          }}
+          className="hairline bg-paper-raised px-6 py-8 text-center"
+        >
+          <p className="font-medium">Upload the implementation file</p>
+          <p className="mt-1 text-sm text-graphite-ink">
+            The adidas order book: names, colourways, fit and sizes.{" "}
+            <strong>Never changes a quantity</strong> — safe to re-upload
+            whenever adidas send a new one.
+          </p>
+          <label className="mt-4 inline-block">
+            <span className="cursor-pointer hairline px-4 py-2 text-sm hover:border-fairway transition-colors duration-150 inline-block">
+              Choose implementation file
+            </span>
+            <input
+              ref={detailsInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv,.tsv"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) upload(file, undefined, "details");
+              }}
+            />
+          </label>
+        </div>
       </div>
 
       {pending && (
@@ -425,7 +488,7 @@ export function StockImport() {
               </label>
             )}
 
-            {isInvoice && (
+            {!isOrderBook && isInvoice && (
               <label className="mb-2 flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
                 <input
                   type="radio"
@@ -448,6 +511,7 @@ export function StockImport() {
               </label>
             )}
 
+            {!isOrderBook && (
             <label className="mb-2 flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
               <input
                 type="radio"
@@ -472,7 +536,9 @@ export function StockImport() {
                 </span>
               </span>
             </label>
+            )}
 
+            {!isOrderBook && (
             <label className="flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-fairway">
               <input
                 type="radio"
@@ -498,7 +564,9 @@ export function StockImport() {
                 </span>
               </span>
             </label>
+            )}
 
+            {!isOrderBook && (
             <label className="mt-2 flex gap-3 hairline bg-paper-raised px-4 py-3 cursor-pointer has-checked:border-flag">
               <input
                 type="radio"
@@ -519,6 +587,7 @@ export function StockImport() {
                 </span>
               </span>
             </label>
+            )}
 
             {(mode === "replace" ||
               (mode === "add" && (preview.alreadyApplied?.length ?? 0) > 0)) && (
