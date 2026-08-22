@@ -544,7 +544,7 @@ export function QuoteReview() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-5 w-full bg-fairway px-4 py-3 text-paper font-medium hover:bg-ink transition-colors duration-150 disabled:opacity-60"
+            className="btn-primary mt-5 w-full text-center disabled:opacity-60"
           >
             {submitting ? "Sending…" : "Request a quote"}
           </button>

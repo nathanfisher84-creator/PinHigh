@@ -313,3 +313,42 @@
 @utility link-underline-on {
   background-size: 100% 1px;
 }
+
+/* ---------------------------------------------------------------------------
+   Retail register (the approved home-page reference), shared by every page:
+   confident uppercase CTAs, one accent, no decoration.
+   ------------------------------------------------------------------------ */
+
+@utility btn-primary {
+  display: inline-block;
+  background-color: var(--color-fairway);
+  color: var(--color-paper-raised);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.875rem 1.75rem;
+  transition: background-color 150ms var(--ease-out-quiet);
+}
+.btn-primary:hover { background-color: var(--color-ink); }
+
+@utility btn-secondary {
+  display: inline-block;
+  border: 1px solid var(--color-ink);
+  color: var(--color-ink);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.8125rem 1.75rem;
+  transition: background-color 150ms var(--ease-out-quiet), color 150ms var(--ease-out-quiet);
+}
+.btn-secondary:hover { background-color: var(--color-ink); color: var(--color-paper-raised); }
+
+/* Section eyebrow — "SHOP BY CATEGORY" voice. */
+@utility eyebrow {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}

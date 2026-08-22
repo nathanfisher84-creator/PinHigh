@@ -70,7 +70,7 @@ export default async function BrandPage({
     <>
       <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 pt-14 pb-8">
         <p className="label-caps">Brand</p>
-        <h1 className="mt-3 display text-4xl lg:text-6xl">{resolved}</h1>
+        <h1 className="mt-3 display text-4xl uppercase lg:text-5xl">{resolved}</h1>
         <p className="mt-2 tabular text-sm text-graphite-ink">
           {cards.length} {cards.length === 1 ? "style" : "styles"} ·{" "}
           {totalUnits.toLocaleString("en-AE")} units in stock

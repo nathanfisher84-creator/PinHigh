@@ -56,7 +56,7 @@ export default async function CategoryPage({
   return (
     <>
       <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 pt-14 pb-8">
-        <h1 className="display text-4xl lg:text-6xl">{label}</h1>
+        <h1 className="display text-4xl uppercase lg:text-5xl">{label}</h1>
         <p className="mt-2 max-w-2xl text-graphite-ink">
           Enter quantities against the sizes you need and send it to our team as
           a quote request.

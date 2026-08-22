@@ -82,7 +82,7 @@ export default async function QuoteConfirmationPage({ params }: { params: Params
         <PrintButton />
         <Link
           href="/catalogue"
-          className="bg-fairway px-5 py-2.5 text-sm text-paper hover:bg-ink transition-colors duration-150"
+          className="btn-primary !px-5 !py-2.5"
         >
           Back to the catalogue
         </Link>

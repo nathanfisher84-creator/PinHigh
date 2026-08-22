@@ -53,7 +53,7 @@ export function OrderRail() {
 
         <Link
           href="/quote"
-          className="shrink-0 bg-fairway px-4 py-2.5 sm:px-6 sm:py-3 text-paper text-sm font-medium hover:bg-ink transition-colors duration-150"
+          className="btn-primary shrink-0 !px-4 !py-2.5 sm:!px-6 sm:!py-3"
         >
           Review and request a quote
         </Link>

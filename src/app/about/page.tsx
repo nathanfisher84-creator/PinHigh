@@ -13,7 +13,7 @@ export default async function AboutPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 py-12">
-      <h1 className="text-3xl display-xl">About Pin High</h1>
+      <h1 className="display text-3xl uppercase">About Pin High</h1>
 
       <div className="mt-6 space-y-5 text-lg">
         <p>
@@ -87,7 +87,7 @@ export default async function AboutPage() {
       <div className="mt-12 rule pt-8">
         <Link
           href="/catalogue"
-          className="inline-block bg-fairway px-6 py-3 text-paper hover:bg-ink transition-colors duration-150"
+          className="btn-primary"
         >
           Browse the catalogue
         </Link>

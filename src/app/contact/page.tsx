@@ -13,7 +13,7 @@ export default async function ContactPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 py-12">
-      <h1 className="text-3xl display-xl">Contact</h1>
+      <h1 className="display text-3xl uppercase">Contact</h1>
       <p className="mt-4 text-lg text-graphite-ink">
         The fastest route to a price is to build what you need in the catalogue
         and send it as a quote request — it reaches the team with the sizes,
@@ -22,7 +22,7 @@ export default async function ContactPage() {
 
       <Link
         href="/catalogue"
-        className="mt-6 inline-block bg-fairway px-6 py-3 text-paper hover:bg-ink transition-colors duration-150"
+        className="btn-primary mt-6"
       >
         Browse the catalogue
       </Link>

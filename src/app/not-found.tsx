@@ -17,7 +17,7 @@ export default function NotFound() {
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         <Link
           href="/catalogue"
-          className="bg-fairway px-6 py-3 text-paper hover:bg-ink transition-colors duration-150"
+          className="btn-primary"
         >
           Browse the catalogue
         </Link>

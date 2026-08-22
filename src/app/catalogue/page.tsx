@@ -63,7 +63,7 @@ export default async function CataloguePage({
   return (
     <>
       <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 pt-14 pb-8">
-        <h1 className="display text-4xl lg:text-6xl">{heading}</h1>
+        <h1 className="display text-4xl uppercase lg:text-5xl">{heading}</h1>
         <p className="mt-2 max-w-2xl text-graphite-ink">
           Everything here is quoted, not sold online. Enter quantities against the
           sizes you need and send it to our team.
