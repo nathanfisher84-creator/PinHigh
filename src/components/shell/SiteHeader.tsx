@@ -59,8 +59,22 @@ export function SiteHeader({ categories, genders, stockDate, announcement }: Pro
 
   return (
     <>
+      {/* Utility strip — the retail reference carries shipping promos here;
+          the B2B equivalents are supply facts. */}
+      <div className="no-print on-fairway">
+        <div className="mx-auto flex max-w-[110rem] items-center justify-between gap-4 px-5 py-1.5 text-[11px] font-medium tracking-wide sm:px-8 lg:px-12">
+          <p className="uppercase">Corporate golf supply — Dubai</p>
+          <p className="tabular hidden text-on-fairway-dim sm:block">
+            Stock from our own warehouse · {stockAsAt(stockDate)}
+          </p>
+          <Link href="/contact" className="uppercase hover:text-fairway-bright">
+            Help &amp; contact
+          </Link>
+        </div>
+      </div>
+
       {announcement && (
-        <div className="on-fairway text-center text-sm px-4 py-2.5">{announcement}</div>
+        <div className="border-b border-fairway-line on-fairway text-center text-sm px-4 py-2.5">{announcement}</div>
       )}
 
       <header className="no-print sticky top-0 z-30 bg-paper/95 backdrop-blur-sm">
@@ -72,7 +86,7 @@ export function SiteHeader({ categories, genders, stockDate, announcement }: Pro
 
             <nav
               aria-label="Main"
-              className="hidden lg:flex items-center gap-9 text-sm"
+              className="hidden lg:flex items-center gap-8 text-xs font-semibold uppercase tracking-[0.08em]"
             >
               <CatalogueMenu categories={categories} genders={genders} />
 
