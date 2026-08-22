@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { CatalogueCard } from "@/lib/repo/catalogue";
 import type { Condition } from "@/lib/domain/types";
 import { PRICE_ON_REQUEST } from "@/lib/format";
+import { displayStyleName } from "@/lib/domain/display-name";
 import { ProductImage } from "./ProductImage";
 import { AvailabilityStrip } from "./AvailabilityStrip";
 import { ConditionTag } from "./ConditionTag";
@@ -23,6 +24,7 @@ import { ConditionTag } from "./ConditionTag";
 export function ProductCard({ card, priority }: { card: CatalogueCard; priority?: boolean }) {
   const [active, setActive] = useState(0);
   const colourway = card.colourways[active] ?? card.colourways[0];
+  const title = displayStyleName(card.style_name);
   const multi = card.colourways.length > 1;
   const showStrip = active === 0 && card.sizes.length > 0;
   const soldOut = colourway.total_quantity === 0;
@@ -37,7 +39,7 @@ export function ProductCard({ card, priority }: { card: CatalogueCard; priority?
           <div className="absolute inset-0 transition-transform duration-[400ms] ease-[var(--ease-out-quiet)] group-hover:scale-[1.02] motion-reduce:transform-none">
             <ProductImage
               src={colourway.image}
-              alt={`${card.style_name}${colourway.colour ? ` in ${colourway.colour}` : ""}`}
+              alt={`${title}${colourway.colour ? ` in ${colourway.colour}` : ""}`}
               articleNumber={colourway.article_number}
               priority={priority}
             />
@@ -67,7 +69,7 @@ export function ProductCard({ card, priority }: { card: CatalogueCard; priority?
             href={`/product/${encodeURIComponent(colourway.article_number)}`}
             className="link-underline group-hover:link-underline-on"
           >
-            {card.style_name}
+            {title}
           </Link>
         </h3>
 

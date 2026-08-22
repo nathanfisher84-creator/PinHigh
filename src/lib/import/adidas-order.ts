@@ -65,7 +65,12 @@ export function splitArticleName(raw: string): { name: string; colour: string } 
   return { name: titleCaseName(value), colour: "" };
 }
 
-/** "PERF TXT POLO" -> "Perf Txt Polo". adidas ships these shouting. */
+/**
+ * "PERF TXT POLO" -> "Perf Txt Polo". adidas ships these shouting.
+ *
+ * This stored form is the importer identity — a re-import matches on it.
+ * Buyer-facing titles are expanded in display-name.ts, not here.
+ */
 function titleCaseName(s: string): string {
   return s
     .toLowerCase()

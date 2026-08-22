@@ -6,6 +6,7 @@ import { OrderRail } from "@/components/order/OrderRail";
 import { EphemeralNotice } from "@/components/shell/EphemeralNotice";
 import { getFacets, getStockAsAt } from "@/lib/repo/catalogue";
 import { getSetting } from "@/lib/db";
+import { publicContactNumber } from "@/lib/domain/public-contact";
 import { isEphemeralStore, isIndexable, siteUrl } from "@/lib/runtime";
 
 export const metadata: Metadata = {
@@ -40,7 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const facets = await getFacets();
   const announcement = await getSetting("announcement");
   const contactEmail = await getSetting("contact_email");
-  const contactPhone = await getSetting("contact_phone");
+  const contactPhone = publicContactNumber(await getSetting("contact_phone")) ?? undefined;
   const stockDate = await getStockAsAt();
 
   return (

@@ -3,6 +3,7 @@ import { getQuoteByReference } from "@/lib/repo/quotes";
 import { REFERENCE_PATTERN } from "@/lib/validation/quote";
 import { writeWorkbook, type Cell } from "@/lib/xlsx/write";
 import { formatDate } from "@/lib/format";
+import { displayStyleName } from "@/lib/domain/display-name";
 
 /**
  * The buyer's downloadable copy of their quote request.
@@ -39,7 +40,7 @@ export async function GET(
     ["Article", "Item", "Colour", "Size", "Quantity", "Branding"],
     ...quote.lines.map((l): Cell[] => [
       l.article_number,
-      `${l.brand} ${l.style_name}`.trim(),
+      `${l.brand} ${displayStyleName(l.style_name)}`.trim(),
       l.colour,
       l.size,
       l.quantity,

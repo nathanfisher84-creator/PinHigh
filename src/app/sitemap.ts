@@ -16,7 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
 
   const products = await all<{ article_number: string; updated_at: string }>(
-    "SELECT article_number, updated_at FROM products WHERE is_visible = 1 AND condition = 'new'",
+    "SELECT article_number, updated_at FROM products WHERE is_visible = 1 AND needs_review = 0 AND condition = 'new'",
   );
 
   return [

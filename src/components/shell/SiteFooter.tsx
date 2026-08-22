@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Logo } from "./Logo";
 import { stockAsAt } from "@/lib/format";
 import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
+import { publicContactNumber, telHref } from "@/lib/domain/public-contact";
 import type { Facet } from "@/lib/repo/catalogue";
 
 export function SiteFooter({
@@ -21,6 +22,8 @@ export function SiteFooter({
   contactPhone?: string;
 }) {
   const pathname = usePathname();
+  const phone = publicContactNumber(contactPhone);
+  const phoneHref = phone ? telHref(phone) : null;
 
   // The admin panel is a working tool, not a storefront.
   if (pathname.startsWith("/admin")) return null;
@@ -100,7 +103,7 @@ export function SiteFooter({
 
               {/* A B2B buyer deciding whether to trust the company looks for a
                   person to reach before anything else. */}
-              {(contactEmail || contactPhone) && (
+              {(contactEmail || phone) && (
                 <div className="mt-6">
                   <h2 className="label-caps text-on-fairway-dim mb-2">Talk to us</h2>
                   {contactEmail && (
@@ -111,12 +114,12 @@ export function SiteFooter({
                       {contactEmail}
                     </a>
                   )}
-                  {contactPhone && (
+                  {phone && phoneHref && (
                     <a
-                      href={`tel:${contactPhone.replace(/[^+d]/g, "")}`}
+                      href={phoneHref}
                       className="tabular mt-1 block text-sm link-underline hover:link-underline-on"
                     >
-                      {contactPhone}
+                      {phone}
                     </a>
                   )}
                 </div>
