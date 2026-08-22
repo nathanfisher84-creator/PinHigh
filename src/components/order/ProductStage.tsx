@@ -3,6 +3,22 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProductImage } from "@/components/catalogue/ProductImage";
+import {
+  applyLogoKey,
+  clampCoord,
+  clampScale,
+  DEFAULT_TRANSFORM,
+  MAX_SCALE,
+  MIN_SCALE,
+  normalizeRotation,
+  pointerAngleDeg,
+  pointerDistance,
+  readLogoState,
+  rotationFromDrag,
+  scaleFromHandleDrag,
+  writeLogoState,
+  type LogoState,
+} from "@/lib/logo-preview";
 
 /**
  * The product stage: every angle the supplier pack carried, plus the buyer's
@@ -16,12 +32,19 @@ import { ProductImage } from "@/components/catalogue/ProductImage";
  *
  * The logo is remembered in localStorage, so a buyer who uploads it once can
  * walk the whole catalogue trying it on everything — which is the point.
+ * Position, size and rotation travel with it.
  */
 
-const LOGO_KEY = "ph_buyer_logo";
 const MAX_LOGO_BYTES = 4 * 1024 * 1024;
 /** Stored downscaled: localStorage is small and a preview needs no more. */
 const MAX_LOGO_EDGE = 600;
+
+const RESIZE_HANDLES = [
+  { id: "nw", className: "left-0 top-0 -translate-x-1/2 -translate-y-1/2", cursor: "nwse-resize", label: "Resize logo from top left" },
+  { id: "ne", className: "right-0 top-0 translate-x-1/2 -translate-y-1/2", cursor: "nesw-resize", label: "Resize logo from top right" },
+  { id: "sw", className: "left-0 bottom-0 -translate-x-1/2 translate-y-1/2", cursor: "nesw-resize", label: "Resize logo from bottom left" },
+  { id: "se", className: "right-0 bottom-0 translate-x-1/2 translate-y-1/2", cursor: "nwse-resize", label: "Resize logo from bottom right" },
+] as const;
 
 interface StageImage {
   url: string;
@@ -37,22 +60,10 @@ interface Props {
   badge?: React.ReactNode;
 }
 
-interface LogoState {
-  dataUrl: string;
-  /** Centre of the logo, as fractions of the stage box. */
-  x: number;
-  y: number;
-  /** Logo width as a fraction of stage width. */
-  scale: number;
-}
-
-function readStoredLogo(): string | null {
-  try {
-    return localStorage.getItem(LOGO_KEY);
-  } catch {
-    return null;
-  }
-}
+type Gesture =
+  | { type: "move"; pointerId: number; dx: number; dy: number }
+  | { type: "resize"; pointerId: number; startScale: number; startDist: number }
+  | { type: "rotate"; pointerId: number; startRotation: number; startAngle: number };
 
 /** Downscale raster logos on a canvas; keep SVGs as they are (they scale). */
 async function fileToDataUrl(file: File): Promise<string> {
@@ -77,19 +88,44 @@ async function fileToDataUrl(file: File): Promise<string> {
   return canvas.toDataURL("image/png");
 }
 
+function persist(state: LogoState | null) {
+  if (typeof window === "undefined") return;
+  writeLogoState(window.localStorage, state);
+}
+
 export function ProductStage({ images, articleNumber, styleName, colour, badge }: Props) {
   const [index, setIndex] = useState(0);
   const [logo, setLogo] = useState<LogoState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ pointerId: number; dx: number; dy: number } | null>(null);
+  const gestureRef = useRef<Gesture | null>(null);
+  const logoRef = useRef<LogoState | null>(null);
+  const readyRef = useRef(false);
+
+  logoRef.current = logo;
+  readyRef.current = ready;
 
   const current = images[Math.min(index, Math.max(0, images.length - 1))] ?? null;
 
-  // A logo uploaded on another product page is picked up here automatically.
+  // A logo uploaded on another product page is picked up here automatically,
+  // including the last position, size and rotation.
   useEffect(() => {
-    const stored = readStoredLogo();
-    if (stored) setLogo({ dataUrl: stored, x: 0.5, y: 0.42, scale: 0.18 });
+    if (typeof window === "undefined") return;
+    const stored = readLogoState(window.localStorage);
+    if (stored) setLogo(stored);
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ready || gestureRef.current) return;
+    persist(logo);
+  }, [logo, ready]);
+
+  useEffect(() => {
+    return () => {
+      if (readyRef.current) persist(logoRef.current);
+    };
   }, []);
 
   const onUpload = async (file: File | undefined | null) => {
@@ -101,12 +137,13 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
     }
     try {
       const dataUrl = await fileToDataUrl(file);
-      try {
-        localStorage.setItem(LOGO_KEY, dataUrl);
-      } catch {
-        // Storage full or blocked: the preview still works for this page.
-      }
-      setLogo({ dataUrl, x: 0.5, y: 0.42, scale: 0.18 });
+      setLogo((currentLogo) => ({
+        dataUrl,
+        x: currentLogo?.x ?? DEFAULT_TRANSFORM.x,
+        y: currentLogo?.y ?? DEFAULT_TRANSFORM.y,
+        scale: currentLogo?.scale ?? DEFAULT_TRANSFORM.scale,
+        rotation: currentLogo?.rotation ?? DEFAULT_TRANSFORM.rotation,
+      }));
     } catch {
       setError("That file couldn't be read as an image. PNG with transparency works best.");
     }
@@ -114,69 +151,126 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
 
   const clearLogo = () => {
     setLogo(null);
-    try {
-      localStorage.removeItem(LOGO_KEY);
-    } catch {
-      /* nothing to clear */
-    }
   };
 
-  /* -- Dragging ---------------------------------------------------------- */
-
-  const onLogoPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
-      if (!logo || !stageRef.current) return;
-      const box = stageRef.current.getBoundingClientRect();
-      dragRef.current = {
-        pointerId: e.pointerId,
-        dx: (e.clientX - box.left) / box.width - logo.x,
-        dy: (e.clientY - box.top) / box.height - logo.y,
-      };
-      e.currentTarget.setPointerCapture(e.pointerId);
-    },
-    [logo],
-  );
-
-  const onLogoPointerMove = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
-      const drag = dragRef.current;
-      if (!drag || drag.pointerId !== e.pointerId || !stageRef.current) return;
-      const box = stageRef.current.getBoundingClientRect();
-      const x = (e.clientX - box.left) / box.width - drag.dx;
-      const y = (e.clientY - box.top) / box.height - drag.dy;
-      setLogo((l) =>
-        l ? { ...l, x: Math.min(0.98, Math.max(0.02, x)), y: Math.min(0.98, Math.max(0.02, y)) } : l,
-      );
-    },
-    [],
-  );
-
-  const onLogoPointerUp = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
-    if (dragRef.current?.pointerId === e.pointerId) dragRef.current = null;
-  }, []);
-
-  /** Arrow keys nudge; the stage is usable without a mouse (§11). */
-  const onLogoKeyDown = useCallback((e: React.KeyboardEvent<HTMLButtonElement>) => {
-    const step = e.shiftKey ? 0.05 : 0.01;
-    const move: Record<string, [number, number]> = {
-      ArrowLeft: [-step, 0],
-      ArrowRight: [step, 0],
-      ArrowUp: [0, -step],
-      ArrowDown: [0, step],
+  const stageCentre = () => {
+    const box = stageRef.current?.getBoundingClientRect();
+    const currentLogo = logoRef.current;
+    if (!box || !currentLogo) return null;
+    return {
+      box,
+      cx: box.left + currentLogo.x * box.width,
+      cy: box.top + currentLogo.y * box.height,
     };
-    const delta = move[e.key];
-    if (!delta) return;
-    e.preventDefault();
-    setLogo((l) =>
-      l
-        ? {
-            ...l,
-            x: Math.min(0.98, Math.max(0.02, l.x + delta[0])),
-            y: Math.min(0.98, Math.max(0.02, l.y + delta[1])),
-          }
-        : l,
-    );
+  };
+
+  const applyGesture = useCallback((e: PointerEvent) => {
+    const gesture = gestureRef.current;
+    const box = stageRef.current?.getBoundingClientRect();
+    if (!gesture || gesture.pointerId !== e.pointerId || !box) return;
+
+    if (gesture.type === "move") {
+      const x = (e.clientX - box.left) / box.width - gesture.dx;
+      const y = (e.clientY - box.top) / box.height - gesture.dy;
+      setLogo((l) =>
+        l ? { ...l, x: clampCoord(x, l.x), y: clampCoord(y, l.y) } : l,
+      );
+      return;
+    }
+
+    const currentLogo = logoRef.current;
+    if (!currentLogo) return;
+    const cx = box.left + currentLogo.x * box.width;
+    const cy = box.top + currentLogo.y * box.height;
+
+    if (gesture.type === "resize") {
+      const dist = pointerDistance(cx, cy, e.clientX, e.clientY);
+      const scale = scaleFromHandleDrag(gesture.startScale, gesture.startDist, dist);
+      setLogo((l) => (l ? { ...l, scale } : l));
+      return;
+    }
+
+    const angle = pointerAngleDeg(cx, cy, e.clientX, e.clientY);
+    const rotation = rotationFromDrag(gesture.startRotation, gesture.startAngle, angle, e.shiftKey);
+    setLogo((l) => (l ? { ...l, rotation } : l));
   }, []);
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => applyGesture(e);
+    const onUp = (e: PointerEvent) => {
+      if (gestureRef.current?.pointerId !== e.pointerId) return;
+      gestureRef.current = null;
+      persist(logoRef.current);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [applyGesture]);
+
+  const bindGesture = (gesture: Gesture) => {
+    gestureRef.current = gesture;
+  };
+
+  const onMovePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const currentLogo = logoRef.current;
+    const box = stageRef.current?.getBoundingClientRect();
+    if (!currentLogo || !box) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    bindGesture({
+      type: "move",
+      pointerId: e.pointerId,
+      dx: (e.clientX - box.left) / box.width - currentLogo.x,
+      dy: (e.clientY - box.top) / box.height - currentLogo.y,
+    });
+  };
+
+  const onResizePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const centre = stageCentre();
+    const currentLogo = logoRef.current;
+    if (!centre || !currentLogo) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    bindGesture({
+      type: "resize",
+      pointerId: e.pointerId,
+      startScale: currentLogo.scale,
+      startDist: pointerDistance(centre.cx, centre.cy, e.clientX, e.clientY),
+    });
+  };
+
+  const onRotatePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const centre = stageCentre();
+    const currentLogo = logoRef.current;
+    if (!centre || !currentLogo) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    bindGesture({
+      type: "rotate",
+      pointerId: e.pointerId,
+      startRotation: currentLogo.rotation,
+      startAngle: pointerAngleDeg(centre.cx, centre.cy, e.clientX, e.clientY),
+    });
+  };
+
+  /** Arrow keys nudge; [ ] rotate; - = resize. The stage is usable without a mouse (§11). */
+  const onLogoKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (!logo) return;
+    const next = applyLogoKey(logo, e.key, e.shiftKey);
+    if (!next) return;
+    e.preventDefault();
+    setLogo(next);
+  };
+
+  const degrees = logo ? Math.round(normalizeRotation(logo.rotation)) : 0;
+  const sizePercent = logo ? Math.round(logo.scale * 100) : 0;
 
   return (
     <div>
@@ -209,30 +303,71 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
         {badge && <span className="absolute right-0 top-0 z-10">{badge}</span>}
 
         {logo && current && (
-          <button
-            type="button"
-            aria-label="Your logo — drag or use arrow keys to position it"
-            onPointerDown={onLogoPointerDown}
-            onPointerMove={onLogoPointerMove}
-            onPointerUp={onLogoPointerUp}
-            onKeyDown={onLogoKeyDown}
-            className="absolute z-20 touch-none cursor-grab active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-fairway"
+          <div
+            className="absolute z-20 touch-none"
             style={{
               left: `${logo.x * 100}%`,
               top: `${logo.y * 100}%`,
               width: `${logo.scale * 100}%`,
-              transform: "translate(-50%, -50%)",
-              background: "transparent",
+              transform: `translate(-50%, -50%) rotate(${logo.rotation}deg)`,
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- data URL from the buyer's own file */}
-            <img
-              src={logo.dataUrl}
-              alt=""
-              draggable={false}
-              className="pointer-events-none h-auto w-full select-none drop-shadow-[0_1px_2px_rgba(20,24,26,0.25)]"
+            <button
+              type="button"
+              aria-label="Your logo — drag or use arrow keys to position it. Square brackets rotate, minus and plus resize."
+              onPointerDown={onMovePointerDown}
+              onKeyDown={onLogoKeyDown}
+              className="relative block w-full cursor-grab bg-transparent p-0 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-fairway"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- data URL from the buyer's own file */}
+              <img
+                src={logo.dataUrl}
+                alt=""
+                draggable={false}
+                className="pointer-events-none h-auto w-full select-none drop-shadow-[0_1px_2px_rgba(20,24,26,0.25)]"
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 border border-ink/70"
+              />
+            </button>
+
+            {RESIZE_HANDLES.map((handle) => (
+              <button
+                key={handle.id}
+                type="button"
+                aria-label={handle.label}
+                onPointerDown={onResizePointerDown}
+                onKeyDown={onLogoKeyDown}
+                className={`absolute z-30 flex h-11 w-11 items-center justify-center ${handle.className}`}
+                style={{ cursor: handle.cursor }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="block h-2.5 w-2.5 border border-ink bg-paper-raised shadow-[0_0_0_1px_rgba(250,250,248,0.85)]"
+                />
+              </button>
+            ))}
+
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-1/2 top-0 z-20 h-5 w-px -translate-x-1/2 -translate-y-full bg-ink/70"
             />
-          </button>
+            <button
+              type="button"
+              aria-label="Rotate logo. Hold Shift to snap to 15 degrees."
+              onPointerDown={onRotatePointerDown}
+              onKeyDown={onLogoKeyDown}
+              className="absolute left-1/2 top-0 z-30 flex h-11 w-11 -translate-x-1/2 -translate-y-[calc(100%+4px)] items-center justify-center"
+            >
+              <span
+                aria-hidden="true"
+                className="flex h-7 w-7 items-center justify-center border border-ink bg-paper-raised text-ink"
+              >
+                <RotateGlyph />
+              </span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -260,43 +395,75 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
       {/* Logo controls */}
       <div className="mt-3 hairline bg-paper-raised px-3 py-2.5">
         {logo ? (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-            <span className="font-medium">Your logo</span>
-            <label className="flex items-center gap-2 text-xs text-graphite-ink">
-              Size
-              <input
-                type="range"
-                min={6}
-                max={45}
-                value={Math.round(logo.scale * 100)}
-                onChange={(e) =>
-                  setLogo((l) => (l ? { ...l, scale: Number(e.target.value) / 100 } : l))
-                }
-                className="accent-[var(--color-fairway)]"
-                aria-label="Logo size"
-              />
-            </label>
-            <span className="text-xs text-graphite-ink">Drag it anywhere on the photo.</span>
-            <label className="cursor-pointer text-xs underline underline-offset-2 -m-2 p-2">
-              Replace
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                className="sr-only"
-                onChange={(e) => onUpload(e.target.files?.[0])}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={clearLogo}
-              className="text-xs text-graphite-ink underline underline-offset-2 hover:text-flag-ink -m-2 p-2"
-            >
-              Remove
-            </button>
+          <div className="flex flex-col gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span className="font-medium">Your logo</span>
+              <span className="text-xs text-graphite-ink">
+                Drag it, resize from the corners, or rotate from the top handle.
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <label className="flex min-h-11 items-center gap-2 text-xs text-graphite-ink">
+                Size
+                <input
+                  type="range"
+                  min={Math.round(MIN_SCALE * 100)}
+                  max={Math.round(MAX_SCALE * 100)}
+                  value={sizePercent}
+                  onChange={(e) =>
+                    setLogo((l) => (l ? { ...l, scale: clampScale(Number(e.target.value) / 100) } : l))
+                  }
+                  className="h-11 w-28 accent-[var(--color-fairway)]"
+                  aria-label="Logo size"
+                  aria-valuetext={`${sizePercent} percent of the photo width`}
+                />
+                <span className="tabular w-8 text-ink">{sizePercent}%</span>
+              </label>
+              <label className="flex min-h-11 items-center gap-2 text-xs text-graphite-ink">
+                Rotate
+                <input
+                  type="range"
+                  min={0}
+                  max={359}
+                  value={degrees}
+                  onChange={(e) =>
+                    setLogo((l) => (l ? { ...l, rotation: normalizeRotation(Number(e.target.value)) } : l))
+                  }
+                  className="h-11 w-28 accent-[var(--color-fairway)]"
+                  aria-label="Logo rotation in degrees"
+                  aria-valuetext={`${degrees} degrees`}
+                />
+                <span className="tabular w-8 text-ink">{degrees}°</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setLogo((l) => (l ? { ...l, rotation: 0 } : l))}
+                className="min-h-11 min-w-11 px-2 text-xs underline underline-offset-2 hover:text-fairway"
+                disabled={degrees === 0}
+              >
+                Straighten
+              </button>
+              <label className="flex min-h-11 cursor-pointer items-center text-xs underline underline-offset-2">
+                Replace
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="sr-only"
+                  onChange={(e) => onUpload(e.target.files?.[0])}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={clearLogo}
+                className="min-h-11 text-xs text-graphite-ink underline underline-offset-2 hover:text-flag-ink"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-            <label className="cursor-pointer font-medium underline underline-offset-2 hover:text-fairway">
+          <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <label className="flex min-h-11 cursor-pointer items-center font-medium underline underline-offset-2 hover:text-fairway">
               See your logo on this
               <input
                 type="file"
@@ -323,5 +490,20 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
         )}
       </div>
     </div>
+  );
+}
+
+function RotateGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="square"
+        d="M3.2 8a4.8 4.8 0 1 1 1.5 3.5"
+      />
+      <path fill="currentColor" d="M3.2 12.2V8h4.2z" />
+    </svg>
   );
 }
