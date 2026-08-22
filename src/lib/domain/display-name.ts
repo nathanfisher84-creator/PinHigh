@@ -46,6 +46,16 @@ export function displayStyleName(stored: string): string {
   return STYLE_DISPLAY_ALIASES[key] ?? stored;
 }
 
+/** Replace stored SAP titles inside a longer string (image alt, etc.). */
+export function displayStyleNameInText(text: string): string {
+  let out = text;
+  for (const [stored, display] of Object.entries(STYLE_DISPLAY_ALIASES)) {
+    const re = new RegExp(stored.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    out = out.replace(re, display);
+  }
+  return out;
+}
+
 /**
  * Stored style names whose public title (or stored form) contains `query`.
  * Used so a buyer searching "Performance Textured" still finds Perf Txt Polo.

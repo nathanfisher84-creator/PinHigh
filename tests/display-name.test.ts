@@ -1,6 +1,10 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { displayStyleName, storedStyleNamesForQuery } from "@/lib/domain/display-name";
+import {
+  displayStyleName,
+  displayStyleNameInText,
+  storedStyleNamesForQuery,
+} from "@/lib/domain/display-name";
 
 describe("display style names", () => {
   test("expands the current adidas SAP titles conservatively", () => {
@@ -26,6 +30,13 @@ describe("display style names", () => {
     assert.equal(
       displayStyleName(displayStyleName("Perf Txt Polo")),
       "Performance Textured Polo",
+    );
+  });
+
+  test("rewrites a stored title inside alt text without touching colour codes", () => {
+    assert.equal(
+      displayStyleNameInText("adidas Perf Txt Polo in Dualin / Black"),
+      "adidas Performance Textured Polo in Dualin / Black",
     );
   });
 

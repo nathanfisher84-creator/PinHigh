@@ -1,7 +1,11 @@
 import "server-only";
 import { all, get, getSetting } from "@/lib/db";
 import { bySizeOrder } from "@/lib/domain/sizes";
-import { displayStyleName, storedStyleNamesForQuery } from "@/lib/domain/display-name";
+import {
+  displayStyleName,
+  displayStyleNameInText,
+  storedStyleNamesForQuery,
+} from "@/lib/domain/display-name";
 import type {
   Category,
   Condition,
@@ -424,7 +428,10 @@ export async function getColourwayRuns(product: ProductWithVariants): Promise<Co
         ORDER BY is_primary DESC, sort_order ASC`,
       p.id,
     );
-    const images = imageRows.map((r) => ({ url: r.storage_path, alt: r.alt_text }));
+    const images = imageRows.map((r) => ({
+      url: r.storage_path,
+      alt: r.alt_text ? displayStyleNameInText(r.alt_text) : r.alt_text,
+    }));
     return {
       article_number: p.article_number,
       colour: p.colour,
