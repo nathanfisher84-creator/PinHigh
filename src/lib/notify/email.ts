@@ -4,6 +4,7 @@ import { formatDate, money, units } from "@/lib/format";
 import { quoteLinesCsv } from "./csv";
 import type { Recipient } from "./index";
 import { getSetting } from "@/lib/db";
+import { displayStyleName } from "@/lib/domain/display-name";
 import { openSecret } from "@/lib/secrets";
 
 /**
@@ -198,7 +199,7 @@ export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: bool
       (l) => `
     <tr>
       <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4;font-family:monospace">${esc(l.article_number)}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4">${esc(l.brand)} ${esc(l.style_name)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4">${esc(l.brand)} ${esc(displayStyleName(l.style_name))}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4">${esc(l.colour)}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4;font-family:monospace">${esc(l.size)}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #D8D2C4;font-family:monospace;text-align:right">${l.quantity}</td>

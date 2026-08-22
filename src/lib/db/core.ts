@@ -333,8 +333,11 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   branding_min_units: "12",
   announcement: "",
   contact_email: "sales@pinhighuae.com",
-  contact_phone: "+971 4 000 0000",
-  contact_whatsapp: "+971500000000",
+  // Empty until the owner enters a real number. Placeholder defaults
+  // (`+971 4 000 0000`, `+971500000000`) previously rendered on public pages
+  // and produced a broken `tel:+` link in the footer.
+  contact_phone: "",
+  contact_whatsapp: "",
   show_non_new_stock: "false",
   quote_response_hours: "24",
 };

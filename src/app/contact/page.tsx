@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getSettings } from "@/lib/db";
+import { publicContactNumber, telHref } from "@/lib/domain/public-contact";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -10,6 +11,9 @@ export const metadata: Metadata = {
 
 export default async function ContactPage() {
   const settings = await getSettings();
+  const phone = publicContactNumber(settings.contact_phone);
+  const phoneHref = phone ? telHref(phone) : null;
+  const whatsapp = publicContactNumber(settings.contact_whatsapp);
 
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 py-12">
@@ -44,31 +48,31 @@ export default async function ContactPage() {
             </div>
           )}
 
-          {settings.contact_phone && (
+          {phone && phoneHref && (
             <div>
               <dt className="label-caps">Phone</dt>
               <dd className="mt-0.5">
                 <a
-                  href={`tel:${settings.contact_phone.replace(/[^\d+]/g, "")}`}
+                  href={phoneHref}
                   className="tabular text-lg underline underline-offset-4 hover:text-fairway"
                 >
-                  {settings.contact_phone}
+                  {phone}
                 </a>
               </dd>
             </div>
           )}
 
-          {settings.contact_whatsapp && (
+          {whatsapp && (
             <div>
               <dt className="label-caps">WhatsApp</dt>
               <dd className="mt-0.5">
                 <a
-                  href={`https://wa.me/${settings.contact_whatsapp.replace(/\D/g, "")}`}
+                  href={`https://wa.me/${whatsapp.replace(/\D/g, "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="tabular text-lg underline underline-offset-4 hover:text-fairway"
                 >
-                  {settings.contact_whatsapp}
+                  {whatsapp}
                 </a>
               </dd>
             </div>

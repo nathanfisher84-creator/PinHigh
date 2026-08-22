@@ -16,6 +16,7 @@ import {
   CONDITION_LABELS,
 } from "@/lib/domain/types";
 import { PRICE_NOTE, PRICE_ON_REQUEST, stockAsAt } from "@/lib/format";
+import { isRelatedCatalogueCard } from "@/lib/domain/buyer-predicates";
 
 type Params = Promise<{ article_number: string }>;
 
@@ -44,11 +45,7 @@ export default async function ProductPage({ params }: { params: Params }) {
 
   // Related: same category and brand, excluding this style group.
   const related = (await listCatalogue({ category: [product.category], brand: [product.brand] }))
-    .filter(async (c) =>
-      product.style_group
-        ? c.style_group !== product.style_group
-        : c.article_number !== product.article_number,
-    )
+    .filter((c) => isRelatedCatalogueCard(c, product))
     .slice(0, 4);
 
   /* Product structured data — this is a discovery channel for new trade

@@ -7,6 +7,9 @@ import { waMeLink } from "@/lib/notify/whatsapp";
 import { REFERENCE_PATTERN } from "@/lib/validation/quote";
 import { PrintButton } from "@/components/ui/PrintButton";
 import { formatDate, PRICE_NOTE, units } from "@/lib/format";
+import { buyerCopyWasSent } from "@/lib/domain/buyer-predicates";
+import { displayStyleName } from "@/lib/domain/display-name";
+import { publicContactNumber } from "@/lib/domain/public-contact";
 
 /**
  * Confirmation (spec §7.2 step 6).
@@ -38,9 +41,8 @@ export default async function QuoteConfirmationPage({ params }: { params: Params
 
   // Did the buyer's own copy actually leave? Used below so the page never
   // promises an email that was skipped because the channel isn't connected.
-  const buyerCopySent = quote.notified_email.some(
-    async (entry) => entry.recipient === quote.email && entry.status === "sent",
-  );
+  const buyerCopySent = buyerCopyWasSent(quote.notified_email, quote.email);
+  const whatsapp = publicContactNumber(settings.contact_whatsapp);
 
   return (
     <div className="mx-auto max-w-4xl px-4 sm:px-6 py-12">
@@ -61,9 +63,9 @@ export default async function QuoteConfirmationPage({ params }: { params: Params
       </div>
 
       <div className="mt-8 flex flex-wrap gap-3 no-print">
-        {settings.contact_whatsapp && (
+        {whatsapp && (
           <a
-            href={waMeLink(settings.contact_whatsapp, quote.reference, quote.company_name)}
+            href={waMeLink(whatsapp, quote.reference, quote.company_name)}
             target="_blank"
             rel="noopener noreferrer"
             className="hairline px-5 py-2.5 text-sm hover:border-fairway transition-colors duration-150"
@@ -110,7 +112,7 @@ export default async function QuoteConfirmationPage({ params }: { params: Params
                   <td className="px-4 py-2 tabular">{line.article_number}</td>
                   <td className="px-4 py-2">
                     <span className="text-graphite-ink">{line.brand}</span>{" "}
-                    {line.style_name}
+                    {displayStyleName(line.style_name)}
                   </td>
                   <td className="px-4 py-2">{line.colour}</td>
                   <td className="px-4 py-2 tabular">{line.size}</td>

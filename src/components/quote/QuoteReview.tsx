@@ -16,6 +16,7 @@ import { reviewCart, type ReviewState } from "@/app/actions/review";
 import { submitQuoteRequest } from "@/app/actions/quote";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PRICE_NOTE, PRICE_ON_REQUEST, stockAsAt, units } from "@/lib/format";
+import { displayStyleName } from "@/lib/domain/display-name";
 import { EMIRATES } from "@/lib/domain/types";
 import { PHONE_COUNTRIES, trnHint } from "@/lib/validation/quote";
 
@@ -181,7 +182,7 @@ export function QuoteReview() {
                         href={`/product/${encodeURIComponent(group.article_number)}`}
                         className="hover:text-fairway"
                       >
-                        {lead.style_name}
+                        {displayStyleName(lead.style_name)}
                       </Link>
                     </h3>
                     <p className="text-sm text-graphite-ink">
@@ -214,7 +215,7 @@ export function QuoteReview() {
                           <td className="px-4 py-2 tabular">{line.size}</td>
                           <td className="px-4 py-2 text-right">
                             <label className="sr-only" htmlFor={`qty-${line.sku}`}>
-                              Quantity of {line.style_name} size {line.size}
+                              Quantity of {displayStyleName(line.style_name)} size {line.size}
                             </label>
                             <input
                               id={`qty-${line.sku}`}

@@ -1,6 +1,11 @@
 import "server-only";
 import { all, get, getSetting } from "@/lib/db";
 import { bySizeOrder } from "@/lib/domain/sizes";
+import {
+  displayStyleName,
+  displayStyleNameInText,
+  storedStyleNamesForQuery,
+} from "@/lib/domain/display-name";
 import type {
   Category,
   Condition,
@@ -42,7 +47,13 @@ async function conditionClause(): Promise<string> {
   return await getSetting("show_non_new_stock") === "true" ? "" : " AND p.condition = 'new'";
 }
 
-const VISIBLE = "p.is_visible = 1";
+/**
+ * Buyer-facing rows only. `is_visible` is the owner's publish toggle;
+ * `needs_review` is the importer holding pen (uncategorised names land in
+ * Accessories and stay flagged). A trade buyer must not see either.
+ */
+const VISIBLE = "p.is_visible = 1 AND p.needs_review = 0";
+const VISIBLE_UNALIASED = "is_visible = 1 AND needs_review = 0";
 
 /* -------------------------------------------------------------------------
    Filters
@@ -176,7 +187,7 @@ function collapse(rows: JoinedRow[]): CatalogueCard[] {
       article_number: lead.article_number,
       style_group: lead.style_group,
       brand: lead.brand,
-      style_name: lead.style_name,
+      style_name: displayStyleName(lead.style_name),
       category: lead.category,
       gender: lead.gender,
       condition: lead.condition,
@@ -224,12 +235,16 @@ export async function listCatalogue(filters: CatalogueFilters = {}): Promise<Cat
 
   if (filters.search?.trim()) {
     const q = `%${filters.search.trim().toLowerCase()}%`;
+    const aliased = storedStyleNamesForQuery(filters.search.trim());
+    const aliasSql = aliased.length
+      ? ` OR LOWER(p.style_name) IN (${aliased.map(() => "?").join(",")})`
+      : "";
     clauses.push(
       `(LOWER(p.style_name) LIKE ? OR LOWER(p.colour) LIKE ? OR LOWER(p.article_number) LIKE ?
         OR LOWER(p.brand) LIKE ?
-        OR EXISTS (SELECT 1 FROM variants sv WHERE sv.product_id = p.id AND LOWER(sv.sku) LIKE ?))`,
+        OR EXISTS (SELECT 1 FROM variants sv WHERE sv.product_id = p.id AND LOWER(sv.sku) LIKE ?)${aliasSql})`,
     );
-    params.push(q, q, q, q, q);
+    params.push(q, q, q, q, q, ...aliased);
   }
 
   let where = clauses.join(" AND ") + (await conditionClause());
@@ -297,7 +312,7 @@ export async function getProductByArticle(
   articleNumber: string,
 ): Promise<ProductWithVariants | null> {
   const row = await get<ProductRow>(
-    `SELECT * FROM products WHERE article_number = ? AND is_visible = 1`,
+    `SELECT * FROM products WHERE article_number = ? AND ${VISIBLE_UNALIASED}`,
     articleNumber,
   );
   if (!row) return null;
@@ -339,13 +354,19 @@ export async function getProductByArticle(
                   WHERE i.product_id = p.id
                   ORDER BY i.is_primary DESC, i.sort_order ASC LIMIT 1) AS primary_image
            FROM products p
-          WHERE p.style_group = ? AND p.is_visible = 1
+          WHERE p.style_group = ? AND ${VISIBLE}
           ORDER BY p.colour ASC`,
         product.style_group,
       )
     : [];
 
-  return { ...product, variants, images, siblings };
+  return {
+    ...product,
+    style_name: displayStyleName(product.style_name),
+    variants,
+    images,
+    siblings,
+  };
 }
 
 /**
@@ -383,7 +404,7 @@ export async function getColourwayRuns(product: ProductWithVariants): Promise<Co
   const articles = product.style_group
     ? (
         await all<ProductRow>(
-          `SELECT * FROM products WHERE style_group = ? AND is_visible = 1 ORDER BY colour ASC`,
+          `SELECT * FROM products WHERE style_group = ? AND ${VISIBLE_UNALIASED} ORDER BY colour ASC`,
           product.style_group,
         )
       ).map(toProduct)
@@ -407,7 +428,10 @@ export async function getColourwayRuns(product: ProductWithVariants): Promise<Co
         ORDER BY is_primary DESC, sort_order ASC`,
       p.id,
     );
-    const images = imageRows.map((r) => ({ url: r.storage_path, alt: r.alt_text }));
+    const images = imageRows.map((r) => ({
+      url: r.storage_path,
+      alt: r.alt_text ? displayStyleNameInText(r.alt_text) : r.alt_text,
+    }));
     return {
       article_number: p.article_number,
       colour: p.colour,
@@ -446,7 +470,7 @@ export async function findExactArticle(query: string): Promise<string | null> {
       WHERE (LOWER(article_number) = LOWER(?)
              OR EXISTS (SELECT 1 FROM variants v
                          WHERE v.product_id = products.id AND LOWER(v.sku) = LOWER(?)))
-        AND is_visible = 1
+        AND ${VISIBLE_UNALIASED}
       LIMIT 1`,
     q,
     q,
