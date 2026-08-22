@@ -127,7 +127,14 @@ export function SiteFooter({
 
         <div className="mt-16 flex flex-col gap-2 border-t border-fairway-line py-8 text-xs text-on-fairway-dim sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Pin High UAE.</p>
-          <p>Quoted in AED, excluding 5% VAT.</p>
+          <div className="flex items-center gap-5">
+            <p>Quoted in AED, excluding 5% VAT.</p>
+            {/* Quiet, but findable: the sign-in gate does the protecting. */}
+            <Link href="/admin" className="link-underline hover:link-underline-on">
+              Admin
+
+            </Link>
+          </div>
         </div>
       </div>
     </footer>
