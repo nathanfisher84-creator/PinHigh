@@ -134,14 +134,20 @@ export async function submitQuoteRequest(formData: FormData): Promise<SubmitResu
   /* -- Logo (§8) --------------------------------------------------------- */
 
   let logoPath: string | null = null;
+  let logoFailed = false;
   try {
     const file = formData.get("logo");
     if (file instanceof File) logoPath = await storeLogo(file);
   } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "That logo file couldn't be saved.",
-    };
+    if (err instanceof Error && /over 25 MB/.test(err.message)) {
+      // The buyer can fix this one; tell them.
+      return { ok: false, message: err.message };
+    }
+    // Infrastructure failure (storage misconfigured or down). This exact
+    // failure took every logo-carrying order down in production once —
+    // never again: the request proceeds, the team asks for artwork by email.
+    console.error("[pinhigh] logo storage failed; continuing without it:", err);
+    logoFailed = true;
   }
 
   /* -- Re-price and re-check stock server-side (§7.2 step 3) ------------- */
@@ -210,7 +216,9 @@ export async function submitQuoteRequest(formData: FormData): Promise<SubmitResu
       required_by: input.required_by || null,
       notes: input.notes || null,
       logo_path: logoPath,
-      logo_notes: input.logo_notes || null,
+      logo_notes: logoFailed
+        ? `${input.logo_notes ? input.logo_notes + " — " : ""}[Logo file could not be stored — ask the buyer to email their artwork.]`
+        : input.logo_notes || null,
       lines: resolved,
     }));
   } catch (err) {

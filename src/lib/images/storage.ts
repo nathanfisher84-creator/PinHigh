@@ -20,7 +20,16 @@ import path from "node:path";
  * trademark and must never land in a public bucket or directory.
  */
 
-const SUPABASE_URL = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+const RAW_SUPABASE_URL = process.env.SUPABASE_URL?.replace(/\/+$/, "");
+// Guard against the classic misconfiguration: a key pasted where the URL
+// belongs. That exact mistake once made every logo-carrying quote fail in
+// production. A non-URL value is treated as unset, loudly.
+const SUPABASE_URL = RAW_SUPABASE_URL?.startsWith("http") ? RAW_SUPABASE_URL : undefined;
+if (RAW_SUPABASE_URL && !SUPABASE_URL) {
+  console.error(
+    "[pinhigh] SUPABASE_URL does not look like a URL (it may be an API key). Storage is falling back to local disk until it is fixed.",
+  );
+}
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const IMAGE_BUCKET = "product-images";
