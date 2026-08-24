@@ -24,7 +24,7 @@ export default async function AdminLoginPage({
   return (
     <div className="min-h-dvh bg-paper flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <Logo />
+        <Logo size="site" />
         <h1 className="mt-8 text-2xl">Sign in</h1>
         <p className="mt-1 text-sm text-graphite-ink">
           Stock, quote requests and settings for pinhighuae.com.

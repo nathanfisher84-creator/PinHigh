@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getDashboardStats } from "@/lib/repo/quotes";
+import { getStockCounts } from "@/lib/repo/stock";
 import { formatDateTime, hoursSince, money, relativeTime } from "@/lib/format";
 import { QUOTE_STATUS_LABELS } from "@/lib/domain/types";
 
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function AdminDashboard() {
   const stats = await getDashboardStats();
+  const stock = await getStockCounts();
 
   return (
     <div>
@@ -111,6 +113,10 @@ export default async function AdminDashboard() {
                 · {formatDateTime(stats.lastImportAt)}
               </span>
             )}
+          </p>
+          <p className="mt-2 text-sm">
+            <span className="tabular font-medium">{stock.units.toLocaleString("en-AE")}</span>{" "}
+            <span className="text-graphite-ink">units held in the warehouse.</span>
           </p>
           <p className="mt-2 text-sm">
             <span className="tabular font-medium">{stats.lowStock}</span>{" "}

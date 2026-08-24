@@ -30,7 +30,7 @@ export function SiteFooter({
       <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 pt-16 lg:pt-20">
         <div className="grid gap-12 lg:grid-cols-[1fr_auto] lg:gap-24">
           <div>
-            <Logo tone="dark" />
+            <Logo tone="dark" size="site" />
             {/* §14.6: the old "best value golf gear" line was a discount promise.
                 This says who the site serves instead. */}
             <p className="mt-6 measure text-lg text-on-fairway-dim">

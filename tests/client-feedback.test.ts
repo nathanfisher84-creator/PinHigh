@@ -68,14 +68,7 @@ function walk(dir: string, acc: string[] = []): string[] {
 
 describe("stock date is admin-only", () => {
   test("public app and components never render “Stock as at”", () => {
-    const roots = [
-      path.join(process.cwd(), "src/app"),
-      path.join(process.cwd(), "src/components"),
-    ];
-    const files = roots.flatMap((root) => walk(root)).filter((file) => {
-      const rel = file.replace(process.cwd() + path.sep, "");
-      return !rel.includes(`${path.sep}admin${path.sep}`) && !rel.includes("/admin/");
-    });
+    const files = publicSourceFiles();
     assert.ok(files.length > 10, "expected to scan public source files");
     for (const file of files) {
       const text = readFileSync(file, "utf8");
@@ -90,5 +83,60 @@ describe("stock date is admin-only", () => {
         `${file} still calls stockAsAt on a public surface`,
       );
     }
+  });
+});
+
+function publicSourceFiles(): string[] {
+  const roots = [
+    path.join(process.cwd(), "src/app"),
+    path.join(process.cwd(), "src/components"),
+  ];
+  return roots.flatMap((root) => walk(root)).filter((file) => {
+    const rel = file.replace(process.cwd() + path.sep, "");
+    return !rel.includes(`${path.sep}admin${path.sep}`) && !rel.includes("/admin/");
+  });
+}
+
+describe("header does not name Dubai as the service area", () => {
+  test("the top-left utility strip does not say Dubai", () => {
+    const header = readFileSync(
+      path.join(process.cwd(), "src/components/shell/SiteHeader.tsx"),
+      "utf8",
+    );
+    assert.equal(/Dubai/.test(header), false);
+    assert.ok(header.includes("Corporate golf supply"));
+    assert.ok(header.includes("AN ADIDAS OFFICIAL B2B PARTNER"));
+  });
+});
+
+describe("aggregate units-held is not on public pages", () => {
+  test("buyers never see a warehouse-total widget", () => {
+    const banned = [
+      "units held here",
+      "Stock held in Dubai",
+      "STOCK HELD IN DUBAI",
+      "Total in stock",
+      "units in stock",
+    ];
+    for (const file of publicSourceFiles()) {
+      const text = readFileSync(file, "utf8");
+      for (const phrase of banned) {
+        assert.equal(
+          text.includes(phrase),
+          false,
+          `${file} still advertises aggregate stock (${phrase})`,
+        );
+      }
+    }
+  });
+
+  test("the size grid still shows per-size availability", () => {
+    const grid = readFileSync(
+      path.join(process.cwd(), "src/components/order/SizeGrid.tsx"),
+      "utf8",
+    );
+    assert.ok(grid.includes("v.quantity"));
+    assert.ok(grid.includes("available"));
+    assert.ok(grid.includes("Sold out"));
   });
 });
