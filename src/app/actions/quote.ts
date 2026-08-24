@@ -1,13 +1,8 @@
 "use server";
 
 import { headers } from "next/headers";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
-import { putArtwork } from "@/lib/images/storage";
 import { quoteRequestSchema } from "@/lib/validation/quote";
-import { getVariantsBySku } from "@/lib/repo/catalogue";
-import { createQuoteRequest } from "@/lib/repo/quotes";
-import { dispatchQuoteNotifications } from "@/lib/notify";
+import { collectLogoFiles, persistQuoteRequest, storeLogoFile } from "@/lib/quotes/submit";
 import { clientIp, rateLimit, verifyTurnstile } from "@/lib/ratelimit";
 import { run, uid, now } from "@/lib/db";
 
@@ -18,6 +13,9 @@ import { run, uid, now } from "@/lib/db";
  * is the salesperson's conversation, not the form's. So availability is
  * re-checked, movement is flagged onto the line for the sales team, and the
  * buyer is never told their request is invalid.
+ *
+ * Stock is not decremented here. That happens only when staff approve the
+ * request in admin.
  */
 
 export interface SubmitResult {
@@ -28,47 +26,16 @@ export interface SubmitResult {
   message?: string;
 }
 
-/** Vector strongly preferred, raster accepted with a warning (§8). */
-const LOGO_TYPES = new Map<string, string>([
-  ["application/postscript", "ai"],
-  ["application/illustrator", "ai"],
-  ["application/pdf", "pdf"],
-  ["image/svg+xml", "svg"],
-  ["image/png", "png"],
-  ["image/jpeg", "jpg"],
-  ["image/x-eps", "eps"],
-  ["application/eps", "eps"],
-]);
-
-const MAX_LOGO_BYTES = 25 * 1024 * 1024;
-
-async function storeLogo(file: File): Promise<string | null> {
-  if (!file || file.size === 0) return null;
-  if (file.size > MAX_LOGO_BYTES) {
-    throw new Error("That logo file is over 25 MB. Send it to us by email instead.");
-  }
-
-  const extFromName = path.extname(file.name).replace(".", "").toLowerCase();
-  const ext = LOGO_TYPES.get(file.type) ?? (extFromName || "bin");
-
-  // Customers' trademarks. Stored privately with a random name, served only
-  // through an admin-authenticated route — never from a public bucket or
-  // directory (§8). putArtwork lands in Supabase's private bucket when
-  // configured, local disk otherwise.
-  const stored = `${randomUUID()}.${ext.replace(/[^a-z0-9]/g, "").slice(0, 8)}`;
-  await putArtwork(stored, Buffer.from(await file.arrayBuffer()), file.type || "application/octet-stream");
-  return stored;
-}
-
 export async function submitQuoteRequest(formData: FormData): Promise<SubmitResult> {
   const headerList = await headers();
   const ip = clientIp(headerList);
 
   /* -- Abuse controls (§7.2) -------------------------------------------- */
 
-  // Honeypot. A real buyer never sees this field, so anything in it is a bot.
-  // Return success so the bot has nothing to learn from the response.
-  const honeypot = String(formData.get("company_website") ?? "");
+  // Honeypot. Named so browsers will not autofill it (a field called
+  // `company_website` was being filled by password managers, which returned
+  // a fake success and never wrote the request).
+  const honeypot = String(formData.get("fax_number_hp") ?? formData.get("company_website") ?? "");
   if (honeypot.trim().length > 0) {
     return { ok: true, reference: "PH-Q-0000-0000" };
   }
@@ -79,7 +46,7 @@ export async function submitQuoteRequest(formData: FormData): Promise<SubmitResu
       ok: false,
       message: `That's five requests in an hour from this connection. Try again in ${Math.ceil(
         limit.resetSeconds / 60,
-      )} minutes, or call us on the number in the footer.`,
+      )} minutes, or email us from the contact page.`,
     };
   }
 
@@ -116,7 +83,7 @@ export async function submitQuoteRequest(formData: FormData): Promise<SubmitResu
     notes: formData.get("notes") ?? "",
     logo_notes: formData.get("logo_notes") ?? "",
     lines,
-    company_website: honeypot,
+    company_website: "",
     turnstile_token: formData.get("turnstile_token") ?? "",
   });
 
@@ -130,97 +97,52 @@ export async function submitQuoteRequest(formData: FormData): Promise<SubmitResu
   }
 
   const input = parsed.data;
-
-  /* -- Logo (§8) --------------------------------------------------------- */
-
-  let logoPath: string | null = null;
-  let logoFailed = false;
-  try {
-    const file = formData.get("logo");
-    if (file instanceof File) logoPath = await storeLogo(file);
-  } catch (err) {
-    if (err instanceof Error && /over 25 MB/.test(err.message)) {
-      // The buyer can fix this one; tell them.
-      return { ok: false, message: err.message };
-    }
-    // Infrastructure failure (storage misconfigured or down). This exact
-    // failure took every logo-carrying order down in production once —
-    // never again: the request proceeds, the team asks for artwork by email.
-    console.error("[pinhigh] logo storage failed; continuing without it:", err);
-    logoFailed = true;
+  if (!Array.isArray(input.lines) || input.lines.length === 0) {
+    return { ok: false, errors: { lines: "Add at least one size before sending." }, message: "Add at least one size before sending." };
   }
 
-  /* -- Re-price and re-check stock server-side (§7.2 step 3) ------------- */
+  /* -- Logos (§8) — more than one is allowed ----------------------------- */
 
-  const live = await getVariantsBySku(input.lines.map((l) => l.sku));
-
-  const resolved = input.lines.map((line) => {
-    const variant = live.get(line.sku);
-
-    // Price always comes from the server. A price posted by the client is a
-    // suggestion, not a fact.
-    if (!variant) {
-      return {
-        sku: line.sku,
-        article_number: line.article_number,
-        brand: "—",
-        style_name: "Item no longer in the catalogue",
-        colour: "—",
-        size: line.size,
-        quantity: line.quantity,
-        unit_price: null,
-        branding_placements: line.branding?.placements ?? null,
-        stock_flag: "This article is no longer listed — check with the buyer.",
-      };
+  const logoPaths: { storage_path: string; original_name?: string | null }[] = [];
+  let logosFailed = 0;
+  for (const file of collectLogoFiles(formData)) {
+    try {
+      const stored = await storeLogoFile(file);
+      logoPaths.push({ storage_path: stored.path, original_name: stored.name });
+    } catch (err) {
+      if (err instanceof Error && /over 25 MB/.test(err.message)) {
+        // The buyer can fix this one; tell them.
+        return { ok: false, message: err.message };
+      }
+      // Infrastructure failure (storage misconfigured or down). Never lose
+      // the lead over it: proceed without this file and flag the team.
+      console.error("[pinhigh] logo storage failed; continuing without it:", err);
+      logosFailed++;
     }
+  }
 
-    let stockFlag: string | null = null;
-    if (variant.quantity <= 0) {
-      stockFlag = `Sold out since the buyer added it (they asked for ${line.quantity}).`;
-    } else if (variant.quantity < line.quantity) {
-      stockFlag = `Only ${variant.quantity} left — the buyer asked for ${line.quantity}.`;
-    } else if (!variant.is_visible) {
-      stockFlag = "This article has been hidden in the admin panel since the buyer added it.";
-    }
-
-    return {
-      sku: line.sku,
-      article_number: variant.article_number,
-      brand: variant.brand,
-      style_name: variant.style_name,
-      colour: variant.colour,
-      size: variant.size,
-      quantity: line.quantity, // what the buyer asked for, not what is left
-      unit_price: variant.price_wholesale,
-      branding_placements: line.branding?.placements?.length
-        ? line.branding.placements
-        : null,
-      stock_flag: stockFlag,
-    };
-  });
-
-  /* -- Create (§7.2 step 4) ---------------------------------------------- */
+  /* -- Persist. Notifications must not fail this. ------------------------ */
 
   const phone = `${input.phone_country} ${input.phone}`.trim();
 
-  let quote;
   try {
-    quote = (await createQuoteRequest({
+    const quote = await persistQuoteRequest({
       company_name: input.company_name,
-      trn: input.trn || null,
+      trn: input.trn || undefined,
       contact_name: input.contact_name,
-      contact_role: input.contact_role || null,
+      contact_role: input.contact_role || undefined,
       email: input.email,
       phone,
       delivery_emirate: input.delivery_emirate,
-      required_by: input.required_by || null,
-      notes: input.notes || null,
-      logo_path: logoPath,
-      logo_notes: logoFailed
-        ? `${input.logo_notes ? input.logo_notes + " — " : ""}[Logo file could not be stored — ask the buyer to email their artwork.]`
-        : input.logo_notes || null,
-      lines: resolved,
-    }));
+      required_by: input.required_by || undefined,
+      notes: input.notes || undefined,
+      logo_notes: logosFailed
+        ? `${input.logo_notes ? input.logo_notes + " — " : ""}[${logosFailed} logo file${logosFailed === 1 ? "" : "s"} could not be stored — ask the buyer to email their artwork.]`
+        : input.logo_notes || undefined,
+      lines: input.lines,
+      logoPaths,
+    });
+    return { ok: true, reference: quote.reference };
   } catch (err) {
     console.error("[pinhigh] quote create failed:", err);
     return {
@@ -229,17 +151,6 @@ export async function submitQuoteRequest(formData: FormData): Promise<SubmitResu
         "Something went wrong saving your request. Nothing was sent — please try again, or email us directly.",
     };
   }
-
-  /* -- Notify (§7.2 step 5) ---------------------------------------------- */
-  // The request is already committed. A notification failure is logged and
-  // surfaced in the admin panel, and must never fail the request.
-  try {
-    await dispatchQuoteNotifications(quote);
-  } catch (err) {
-    console.error("[pinhigh] notification dispatch failed:", err);
-  }
-
-  return { ok: true, reference: quote.reference };
 }
 
 /* -------------------------------------------------------------------------

@@ -15,10 +15,11 @@ import {
 import { reviewCart, type ReviewState } from "@/app/actions/review";
 import { submitQuoteRequest } from "@/app/actions/quote";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PRICE_NOTE, PRICE_ON_REQUEST, stockAsAt, units } from "@/lib/format";
+import { PRICE_NOTE, PRICE_ON_REQUEST, units } from "@/lib/format";
 import { displayStyleName } from "@/lib/domain/display-name";
 import { EMIRATES } from "@/lib/domain/types";
 import { PHONE_COUNTRIES, trnHint } from "@/lib/validation/quote";
+import { TurnstileField } from "@/components/quote/TurnstileField";
 
 /**
  * The review and request screen (spec §7.2).
@@ -38,6 +39,7 @@ export function QuoteReview() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [logo, setLogo] = useState<File | null>(null);
+  const [extraLogos, setExtraLogos] = useState<File[]>([]);
   const [logoWarning, setLogoWarning] = useState<string | null>(null);
   const [trn, setTrn] = useState("");
 
@@ -115,6 +117,7 @@ export function QuoteReview() {
       ),
     );
     if (logo) formData.set("logo", logo);
+    for (const extra of extraLogos) formData.append("logos", extra);
 
     const result = await submitQuoteRequest(formData);
     setSubmitting(false);
@@ -135,12 +138,13 @@ export function QuoteReview() {
 
   return (
     <form onSubmit={onSubmit} className="grid gap-10 lg:grid-cols-[1fr_22rem] lg:items-start">
-      {/* Honeypot. Off-screen, not display:none, and never focusable by tab. */}
+      {/* Honeypot. Off-screen, not display:none, and never focusable by tab.
+          Named so password managers will not autofill it. */}
       <div className="sr-only" aria-hidden="true">
-        <label htmlFor="company_website">Leave this field empty</label>
+        <label htmlFor="fax_number_hp">Leave this field empty</label>
         <input
-          id="company_website"
-          name="company_website"
+          id="fax_number_hp"
+          name="fax_number_hp"
           type="text"
           tabIndex={-1}
           autoComplete="off"
@@ -348,6 +352,25 @@ export function QuoteReview() {
               onChange={(e) => onLogoChange(e.target.files?.[0] ?? null)}
               className="block w-full text-sm file:mr-3 file:border file:border-sand file:bg-paper file:px-3 file:py-1.5 file:text-sm"
             />
+            <label className="mt-3 block text-sm">
+              <span className="font-medium">Add another logo</span>
+              <span className="block text-xs text-graphite-ink mb-1">
+                Chest and back, or two marks — attach every file you want on this request.
+              </span>
+              <input
+                type="file"
+                multiple
+                accept=".ai,.eps,.pdf,.svg,.png,.jpg,.jpeg"
+                onChange={(e) => setExtraLogos(Array.from(e.target.files ?? []))}
+                className="block w-full text-sm file:mr-3 file:border file:border-sand file:bg-paper file:px-3 file:py-1.5 file:text-sm"
+              />
+            </label>
+            {(logo || extraLogos.length > 0) && (
+              <p className="mt-2 text-xs text-graphite-ink">
+                {[logo, ...extraLogos].filter(Boolean).length} logo
+                {[logo, ...extraLogos].filter(Boolean).length === 1 ? "" : "s"} attached.
+              </p>
+            )}
             {logoWarning && (
               <p className="mt-2 text-xs text-graphite-ink" role="status">
                 {logoWarning}
@@ -536,11 +559,8 @@ export function QuoteReview() {
           {cartTotals.hasBranding && (
             <p className="mt-1 text-xs text-graphite-ink">Branding quoted separately.</p>
           )}
-          {review?.stockAsAt && (
-            <p className="mt-2 tabular text-xs text-graphite-ink">
-              {stockAsAt(review.stockAsAt)}
-            </p>
-          )}
+
+          <TurnstileField />
 
           <button
             type="submit"

@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS products (
   gender            TEXT NOT NULL CHECK (gender IN ('mens','ladies','junior','unisex')),
   description       TEXT,
   fabric            TEXT,
+  -- Official product copy sourced from adidas.ae (never invented).
+  features          TEXT,
+  benefits          TEXT,
+  official_copy_source TEXT,
   season            TEXT,
   price_wholesale   REAL,
   rrp               REAL,
@@ -116,7 +120,9 @@ CREATE TABLE IF NOT EXISTS quote_requests (
   logo_path         TEXT,
   logo_notes        TEXT,
   status            TEXT NOT NULL DEFAULT 'new'
-                      CHECK (status IN ('new','in_progress','quoted','won','lost','expired')),
+                      CHECK (status IN ('new','in_progress','quoted','approved','won','lost','expired','cancelled')),
+  -- 1 once quantities have been taken off the shelf (approve / won).
+  stock_applied     INTEGER NOT NULL DEFAULT 0,
   quoted_value      REAL,
   internal_notes    TEXT,
   notified_email    TEXT NOT NULL DEFAULT '[]',
@@ -141,11 +147,24 @@ CREATE TABLE IF NOT EXISTS quote_lines (
   quantity            INTEGER NOT NULL,
   unit_price          REAL,
   line_total          REAL,
+  rrp                 REAL,
   branding_placements TEXT,
   stock_flag          TEXT,
   sort_order          INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_lines_quote ON quote_lines(quote_request_id);
+
+-- Extra logo files on a request. logo_path on quote_requests remains the
+-- first file for older rows; this table holds every file from the second on,
+-- and all of them for new requests.
+CREATE TABLE IF NOT EXISTS quote_logos (
+  id               TEXT PRIMARY KEY,
+  quote_request_id TEXT NOT NULL REFERENCES quote_requests(id) ON DELETE CASCADE,
+  storage_path     TEXT NOT NULL,
+  original_name    TEXT,
+  sort_order       INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_quote_logos ON quote_logos(quote_request_id);
 
 CREATE TABLE IF NOT EXISTS notification_recipients (
   id        TEXT PRIMARY KEY,

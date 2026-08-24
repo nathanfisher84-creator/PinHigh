@@ -3,18 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "./Logo";
-import { stockAsAt } from "@/lib/format";
 import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
 import { publicContactNumber, telHref } from "@/lib/domain/public-contact";
 import type { Facet } from "@/lib/repo/catalogue";
 
 export function SiteFooter({
-  stockDate,
   categories,
   contactEmail,
   contactPhone,
 }: {
-  stockDate: string | null;
   /** Only categories that hold stock — a footer link to an empty
    *  category is a dead end, and the list was hardcoded before. */
   categories: Facet[];
@@ -94,11 +91,8 @@ export function SiteFooter({
               <h2 className="label-caps text-on-fairway-dim mb-4">How pricing works</h2>
               <p className="text-sm text-on-fairway-dim measure">
                 Everything here is a quote request. We price each one on its own —
-                quantity, branding and delivery together — so there are no prices
-                on the site and nothing is charged online.
-              </p>
-              <p className="tabular mt-4 text-xs text-on-fairway-dim">
-                {stockAsAt(stockDate)}
+                quantity, branding and delivery together. Retail RRP on a product
+                page is not the quote, and nothing is charged online.
               </p>
 
               {/* A B2B buyer deciding whether to trust the company looks for a

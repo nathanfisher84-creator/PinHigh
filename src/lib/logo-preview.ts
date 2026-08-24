@@ -210,3 +210,167 @@ export function writeLogoState(storage: StorageLike, state: LogoState | null): v
     // Quota or private mode: the in-memory preview still works on this page.
   }
 }
+
+/* -------------------------------------------------------------------------
+   Multi-logo / multi-view board
+   ---------------------------------------------------------------------- */
+
+export interface LogoAsset {
+  id: string;
+  dataUrl: string;
+}
+
+export interface ViewPlacement {
+  id: string;
+  viewUrl: string;
+  logoId: string;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+}
+
+export interface LogoBoard {
+  logos: LogoAsset[];
+  placements: ViewPlacement[];
+}
+
+export const EMPTY_BOARD: LogoBoard = { logos: [], placements: [] };
+
+export function newId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function boardFromLegacy(state: LogoState | null): LogoBoard {
+  if (!state) return { logos: [], placements: [] };
+  const id = "legacy";
+  return {
+    logos: [{ id, dataUrl: state.dataUrl }],
+    placements: [],
+  };
+}
+
+export function parseStoredLogoBoard(raw: string | null | undefined): LogoBoard | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith("data:")) {
+    return boardFromLegacy(parseStoredLogo(trimmed));
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      v?: number;
+      logos?: LogoAsset[];
+      placements?: ViewPlacement[];
+      dataUrl?: string;
+    };
+    if (!parsed || typeof parsed !== "object") return null;
+
+    if (parsed.v === 2 && Array.isArray(parsed.logos)) {
+      const logos = parsed.logos.filter(
+        (l): l is LogoAsset =>
+          !!l && typeof l.id === "string" && typeof l.dataUrl === "string" && l.dataUrl.startsWith("data:"),
+      );
+      const placements = (parsed.placements ?? [])
+        .filter(
+          (p): p is ViewPlacement =>
+            !!p &&
+            typeof p.id === "string" &&
+            typeof p.viewUrl === "string" &&
+            typeof p.logoId === "string",
+        )
+        .map((p) => ({
+          ...p,
+          x: clampCoord(p.x, DEFAULT_TRANSFORM.x),
+          y: clampCoord(p.y, DEFAULT_TRANSFORM.y),
+          scale: clampScale(p.scale),
+          rotation: normalizeRotation(p.rotation),
+        }));
+      return { logos, placements };
+    }
+
+    const legacy = parseStoredLogo(trimmed);
+    return legacy ? boardFromLegacy(legacy) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function serializeLogoBoard(board: LogoBoard): string {
+  return JSON.stringify({
+    v: 2,
+    logos: board.logos,
+    placements: board.placements,
+  });
+}
+
+export function readLogoBoard(storage: StorageLike): LogoBoard {
+  try {
+    return parseStoredLogoBoard(storage.getItem(LOGO_STORAGE_KEY)) ?? EMPTY_BOARD;
+  } catch {
+    return EMPTY_BOARD;
+  }
+}
+
+export function writeLogoBoard(storage: StorageLike, board: LogoBoard | null): void {
+  try {
+    if (board && (board.logos.length > 0 || board.placements.length > 0)) {
+      storage.setItem(LOGO_STORAGE_KEY, serializeLogoBoard(board));
+    } else {
+      storage.removeItem(LOGO_STORAGE_KEY);
+    }
+  } catch {
+    /* quota */
+  }
+}
+
+export function addLogoToBoard(board: LogoBoard, dataUrl: string): LogoBoard {
+  const id = newId();
+  return { ...board, logos: [...board.logos, { id, dataUrl }] };
+}
+
+export function removeLogoFromBoard(board: LogoBoard, logoId: string): LogoBoard {
+  return {
+    logos: board.logos.filter((l) => l.id !== logoId),
+    placements: board.placements.filter((p) => p.logoId !== logoId),
+  };
+}
+
+export function placeLogoOnView(board: LogoBoard, viewUrl: string, logoId: string): LogoBoard {
+  if (!board.logos.some((l) => l.id === logoId)) return board;
+  const placement: ViewPlacement = {
+    id: newId(),
+    viewUrl,
+    logoId,
+    ...DEFAULT_TRANSFORM,
+  };
+  return { ...board, placements: [...board.placements, placement] };
+}
+
+export function updatePlacement(
+  board: LogoBoard,
+  placementId: string,
+  patch: Partial<Pick<ViewPlacement, "x" | "y" | "scale" | "rotation">>,
+): LogoBoard {
+  return {
+    ...board,
+    placements: board.placements.map((p) =>
+      p.id === placementId
+        ? {
+            ...p,
+            ...patch,
+            x: patch.x !== undefined ? clampCoord(patch.x, p.x) : p.x,
+            y: patch.y !== undefined ? clampCoord(patch.y, p.y) : p.y,
+            scale: patch.scale !== undefined ? clampScale(patch.scale) : p.scale,
+            rotation: patch.rotation !== undefined ? normalizeRotation(patch.rotation) : p.rotation,
+          }
+        : p,
+    ),
+  };
+}
+
+export function removePlacement(board: LogoBoard, placementId: string): LogoBoard {
+  return { ...board, placements: board.placements.filter((p) => p.id !== placementId) };
+}

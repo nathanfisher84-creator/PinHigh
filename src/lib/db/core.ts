@@ -182,8 +182,28 @@ async function migrate(driver: Driver): Promise<void> {
     await driver.exec(`
       ALTER TABLE products ADD COLUMN IF NOT EXISTS cost_price REAL;
       ALTER TABLE products ADD COLUMN IF NOT EXISTS needs_review INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS features TEXT;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS benefits TEXT;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS official_copy_source TEXT;
       ALTER TABLE stock_imports ADD COLUMN IF NOT EXISTS invoice_refs TEXT;
       ALTER TABLE stock_imports ADD COLUMN IF NOT EXISTS order_refs TEXT;
+      ALTER TABLE quote_requests ADD COLUMN IF NOT EXISTS stock_applied INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE quote_lines ADD COLUMN IF NOT EXISTS rrp REAL;
+      CREATE TABLE IF NOT EXISTS quote_logos (
+        id               TEXT PRIMARY KEY,
+        quote_request_id TEXT NOT NULL REFERENCES quote_requests(id) ON DELETE CASCADE,
+        storage_path     TEXT NOT NULL,
+        original_name    TEXT,
+        sort_order       INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_quote_logos ON quote_logos(quote_request_id);
+    `);
+    // Widen the status check so staff can approve / cancel a request.
+    // Postgres names a column CHECK `{table}_{column}_check`.
+    await driver.exec(`
+      ALTER TABLE quote_requests DROP CONSTRAINT IF EXISTS quote_requests_status_check;
+      ALTER TABLE quote_requests ADD CONSTRAINT quote_requests_status_check
+        CHECK (status IN ('new','in_progress','quoted','approved','won','lost','expired','cancelled'));
     `);
   };
 
@@ -340,6 +360,15 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   contact_whatsapp: "",
   show_non_new_stock: "false",
   quote_response_hours: "24",
+  home_kicker: "AN ADIDAS OFFICIAL B2B PARTNER",
+  home_headline: "The whole golf day.\nOne warehouse.",
+  home_body:
+    "Tournaments, client gifting, staff kit — specified by the size run, embroidered with your logo, quoted within a day.",
+  home_cta_label: "Browse the catalogue",
+  home_cta_href: "/catalogue",
+  carousel_enabled: "false",
+  carousel_title: "New in",
+  carousel_articles: "",
 };
 
 export async function getSetting(key: string): Promise<string> {

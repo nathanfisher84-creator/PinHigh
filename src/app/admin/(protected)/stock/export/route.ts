@@ -28,9 +28,10 @@ export async function GET() {
     size: string;
     quantity: number;
     sku: string;
+    rrp: number | null;
   }>(
     `SELECT p.article_number, p.brand, p.style_name, p.colour, p.category,
-            p.gender, p.condition, v.size, v.quantity, v.sku
+            p.gender, p.condition, v.size, v.quantity, v.sku, p.rrp
        FROM variants v JOIN products p ON p.id = v.product_id
       ORDER BY p.article_number ASC, v.size_order ASC`,
   );
@@ -47,6 +48,7 @@ export async function GET() {
       "Size",
       "Available",
       "SKU",
+      "Retail RRP (AED)",
     ],
     ...rows.map((r): Cell[] => [
       r.article_number,
@@ -59,6 +61,7 @@ export async function GET() {
       r.size,
       r.quantity,
       r.sku,
+      r.rrp,
     ]),
   ];
 

@@ -131,8 +131,8 @@ export async function dispatchQuoteNotifications(
     });
   }
 
-  recordNotification(quote.id, "email", emailLog);
-  recordNotification(quote.id, "whatsapp", whatsappLog);
+  await recordNotification(quote.id, "email", emailLog);
+  await recordNotification(quote.id, "whatsapp", whatsappLog);
 
   return { email: emailLog, whatsapp: whatsappLog };
 }

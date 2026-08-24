@@ -535,6 +535,7 @@ export interface LiveVariant {
   size: string;
   quantity: number;
   price_wholesale: number | null;
+  rrp: number | null;
   case_pack: number | null;
   moq: number | null;
   category: string;
@@ -546,7 +547,7 @@ export async function getVariantsBySku(skus: string[]): Promise<Map<string, Live
   const rows = await all<LiveVariant>(
     `SELECT v.sku, v.size, v.quantity,
             p.article_number, p.brand, p.style_name, p.colour,
-            p.price_wholesale, p.case_pack, p.moq, p.category, p.is_visible
+            p.price_wholesale, p.rrp, p.case_pack, p.moq, p.category, p.is_visible
        FROM variants v
        JOIN products p ON p.id = v.product_id
       WHERE v.sku IN (${skus.map(() => "?").join(",")})`,

@@ -10,7 +10,6 @@ import {
   type Category,
   type Gender,
 } from "@/lib/domain/types";
-import { stockAsAt } from "@/lib/format";
 import { useCartTotals } from "@/lib/cart/store";
 import { Logo } from "./Logo";
 import { CatalogueMenu } from "./CatalogueMenu";
@@ -29,7 +28,6 @@ interface Props {
   brands: Facet[];
   categories: Facet[];
   genders: Facet[];
-  stockDate: string | null;
   announcement: string;
 }
 
@@ -38,7 +36,7 @@ const NAV = [
   { href: "/contact", label: "Contact" },
 ];
 
-export function SiteHeader({ categories, genders, stockDate, announcement }: Props) {
+export function SiteHeader({ categories, genders, announcement }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -64,8 +62,8 @@ export function SiteHeader({ categories, genders, stockDate, announcement }: Pro
       <div className="no-print on-fairway">
         <div className="mx-auto flex max-w-[110rem] items-center justify-between gap-4 px-5 py-1.5 text-[11px] font-medium tracking-wide sm:px-8 lg:px-12">
           <p className="uppercase">Corporate golf supply — Dubai</p>
-          <p className="tabular hidden text-on-fairway-dim sm:block">
-            Stock from our own warehouse · {stockAsAt(stockDate)}
+          <p className="hidden text-on-fairway-dim sm:block">
+            AN ADIDAS OFFICIAL B2B PARTNER
           </p>
           <Link href="/contact" className="uppercase hover:text-fairway-bright">
             Help &amp; contact
@@ -79,7 +77,7 @@ export function SiteHeader({ categories, genders, stockDate, announcement }: Pro
 
       <header className="no-print sticky top-0 z-30 bg-paper/95 backdrop-blur-sm">
         <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12">
-          <div className="flex h-20 items-center justify-between gap-8 border-b border-sand">
+          <div className="flex h-24 items-center justify-between gap-8 border-b border-sand">
             <Link href="/" aria-label="Pin High UAE, home" className="shrink-0">
               <Logo />
             </Link>
@@ -223,10 +221,6 @@ export function SiteHeader({ categories, genders, stockDate, announcement }: Pro
                   </ul>
                 </nav>
               )}
-
-              <p className="tabular text-xs text-graphite-ink rule-top pt-5">
-                {stockAsAt(stockDate)}
-              </p>
             </div>
           </div>
         )}

@@ -1,6 +1,6 @@
 "use server";
 
-import { getVariantsBySku, getBrandingPlacements, getStockAsAt } from "@/lib/repo/catalogue";
+import { getVariantsBySku, getBrandingPlacements } from "@/lib/repo/catalogue";
 import { getSetting } from "@/lib/db";
 
 /**
@@ -16,8 +16,6 @@ export interface ReviewLineState {
   sku: string;
   /** Units on hand right now. */
   available: number;
-  /** Server-authoritative price. The client's copy is only a cache. */
-  unit_price: number | null;
   /** Set when what the buyer asked for is no longer fully there. */
   flag: string | null;
   /** True when the article has been withdrawn from the catalogue entirely. */
@@ -31,7 +29,6 @@ export interface ReviewState {
   lines: ReviewLineState[];
   /** Placements the owner has enabled, by category (§8). */
   placementsByCategory: Record<string, string[]>;
-  stockAsAt: string | null;
   brandingMinUnits: number;
   responseHours: number;
 }
@@ -52,7 +49,6 @@ export async function reviewCart(
       states.push({
         sku: line.sku,
         available: 0,
-        unit_price: null,
         flag: "This item is no longer in the catalogue. Our team will suggest an alternative.",
         gone: true,
         category: "accessories",
@@ -76,7 +72,6 @@ export async function reviewCart(
     states.push({
       sku: line.sku,
       available: variant.quantity,
-      unit_price: variant.price_wholesale,
       flag,
       gone: false,
       category: variant.category,
@@ -93,7 +88,6 @@ export async function reviewCart(
   return {
     lines: states,
     placementsByCategory,
-    stockAsAt: await getStockAsAt(),
     brandingMinUnits: Number(await getSetting("branding_min_units")) || 12,
     responseHours: Number(await getSetting("quote_response_hours")) || 24,
   };

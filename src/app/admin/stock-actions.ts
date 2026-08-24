@@ -66,6 +66,8 @@ export interface PreviewResult {
   alreadyApplied?: string[];
   /** adidas: articles that will arrive without a name or colour. */
   needingDetails?: string[];
+  /** Retail RRP in AED from the file, labelled retail not wholesale. */
+  articleRrp?: { article_number: string; style_name: string; colour: string; rrp: number }[];
 }
 
 /** Saved manual mappings, reused on later uploads (§4.1). */
@@ -199,6 +201,19 @@ export async function previewStockFile(formData: FormData): Promise<PreviewResul
     ...new Set(parsed.rows.filter((r) => r.needs_review).map((r) => r.article_number)),
   ];
 
+  const articleRrp: NonNullable<PreviewResult["articleRrp"]> = [];
+  const seenRrp = new Set<string>();
+  for (const row of parsed.rows) {
+    if (row.rrp === null || seenRrp.has(row.article_number)) continue;
+    seenRrp.add(row.article_number);
+    articleRrp.push({
+      article_number: row.article_number,
+      style_name: row.style_name,
+      colour: row.colour,
+      rrp: row.rrp,
+    });
+  }
+
   return {
     ok: true,
     token: stored,
@@ -210,6 +225,7 @@ export async function previewStockFile(formData: FormData): Promise<PreviewResul
     invoices,
     alreadyApplied,
     needingDetails,
+    articleRrp,
     summary: (await summariseDiff(diff)),
     sheetName,
     inferred: parsed.header.inferred,

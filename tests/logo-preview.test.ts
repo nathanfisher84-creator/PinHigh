@@ -2,21 +2,27 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULT_TRANSFORM,
+  EMPTY_BOARD,
   LOGO_STORAGE_KEY,
   MAX_SCALE,
   MIN_SCALE,
+  addLogoToBoard,
   applyLogoKey,
   clampScale,
   normalizeRotation,
   nudgeLogo,
   parseStoredLogo,
+  parseStoredLogoBoard,
+  placeLogoOnView,
   pointerAngleDeg,
   pointerDistance,
+  readLogoBoard,
   readLogoState,
   rotationFromDrag,
   scaleFromHandleDrag,
   serializeLogoState,
   snapRotation,
+  writeLogoBoard,
   writeLogoState,
   type LogoState,
 } from "@/lib/logo-preview";
@@ -162,5 +168,41 @@ describe("keyboard map", () => {
   test("unknown keys are ignored", () => {
     assert.equal(applyLogoKey(SAMPLE, "Escape"), null);
     assert.equal(applyLogoKey(SAMPLE, "a"), null);
+  });
+});
+
+describe("multi-logo board", () => {
+  test("legacy data-URL storage becomes a board with one logo and no placements", () => {
+    const board = parseStoredLogoBoard("data:image/png;base64,abc");
+    assert.equal(board?.logos.length, 1);
+    assert.equal(board?.placements.length, 0);
+    assert.equal(board?.logos[0].dataUrl, "data:image/png;base64,abc");
+  });
+
+  test("v2 board round-trips two logos on two views", () => {
+    const storage = memoryStorage();
+    let board = addLogoToBoard(EMPTY_BOARD, "data:image/png;base64,chest");
+    board = addLogoToBoard(board, "data:image/png;base64,back");
+    assert.equal(board.logos.length, 2);
+    const chest = board.logos[0].id;
+    const back = board.logos[1].id;
+    board = placeLogoOnView(board, "/views/front.webp", chest);
+    board = placeLogoOnView(board, "/views/back.webp", back);
+    assert.equal(board.placements.length, 2);
+    assert.deepEqual(
+      board.placements.map((p) => p.viewUrl).sort(),
+      ["/views/back.webp", "/views/front.webp"],
+    );
+    writeLogoBoard(storage, board);
+    const read = readLogoBoard(storage);
+    assert.equal(read.logos.length, 2);
+    assert.equal(read.placements.length, 2);
+    assert.ok(storage.map.get(LOGO_STORAGE_KEY)?.includes('"v":2'));
+  });
+
+  test("placing a logo that is not on the board is a no-op", () => {
+    const board = addLogoToBoard(EMPTY_BOARD, "data:image/png;base64,abc");
+    const next = placeLogoOnView(board, "/views/front.webp", "missing");
+    assert.equal(next.placements.length, 0);
   });
 });

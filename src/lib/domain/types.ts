@@ -42,8 +42,10 @@ export const QUOTE_STATUSES = [
   "new",
   "in_progress",
   "quoted",
+  "approved",
   "won",
   "lost",
+  "cancelled",
   "expired",
 ] as const;
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
@@ -72,6 +74,9 @@ export interface Product {
   gender: Gender;
   description: string | null;
   fabric: string | null;
+  features: string | null;
+  benefits: string | null;
+  official_copy_source: string | null;
   season: string | null;
   price_wholesale: number | null;
   rrp: number | null;
@@ -134,6 +139,8 @@ export interface QuoteLine {
   quantity: number;
   unit_price: number | null;
   line_total: number | null;
+  /** Retail RRP snapshot in AED. Distinct from wholesale `unit_price`. */
+  rrp: number | null;
   branding_placements: string[] | null;
   /** Set when availability moved between submission and the team opening it. */
   stock_flag: string | null;
@@ -157,6 +164,8 @@ export interface QuoteRequest {
   logo_path: string | null;
   logo_notes: string | null;
   status: QuoteStatus;
+  /** True once quantities have been taken off the shelf. */
+  stock_applied: boolean;
   quoted_value: number | null;
   internal_notes: string | null;
   notified_email: NotificationLog;
@@ -165,8 +174,16 @@ export interface QuoteRequest {
   updated_at: string;
 }
 
+export interface QuoteLogo {
+  id: string;
+  storage_path: string;
+  original_name: string | null;
+  sort_order: number;
+}
+
 export interface QuoteRequestWithLines extends QuoteRequest {
   lines: QuoteLine[];
+  logos: QuoteLogo[];
 }
 
 export type NotificationLog = Array<{
@@ -257,7 +274,9 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   new: "New",
   in_progress: "In progress",
   quoted: "Quoted",
+  approved: "Approved",
   won: "Won",
   lost: "Lost",
+  cancelled: "Cancelled",
   expired: "Expired",
 };

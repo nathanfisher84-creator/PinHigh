@@ -7,7 +7,7 @@ import {
   type PreviewResult,
 } from "@/app/admin/stock-actions";
 import type { ImportMode } from "@/lib/import/commit";
-import { units } from "@/lib/format";
+import { money, units } from "@/lib/format";
 
 /**
  * The stock import (spec §4.2).
@@ -278,6 +278,38 @@ export function StockImport() {
             />
             <Metric label="New styles" value={diff.stylesCreated} />
           </dl>
+
+          {preview.articleRrp && preview.articleRrp.length > 0 && (
+            <section className="mt-6 hairline bg-paper-raised px-4 py-4">
+              <h3 className="font-medium">Retail RRP in this file (AED)</h3>
+              <p className="mt-1 text-sm text-graphite-ink">
+                Recommended retail, not the quote and not wholesale. Shown on
+                the product page, invoices and this implementation preview.
+              </p>
+              <div className="mt-3 max-h-64 overflow-y-auto scroll-x">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-paper-raised">
+                    <tr className="text-left">
+                      <th className="px-2 py-1">Article</th>
+                      <th className="px-2 py-1">Item</th>
+                      <th className="px-2 py-1">Colour</th>
+                      <th className="px-2 py-1 text-right">Retail RRP (AED)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.articleRrp.map((a) => (
+                      <tr key={a.article_number} className="border-t border-sand">
+                        <td className="px-2 py-1 tabular">{a.article_number}</td>
+                        <td className="px-2 py-1">{a.style_name}</td>
+                        <td className="px-2 py-1">{a.colour}</td>
+                        <td className="px-2 py-1 text-right tabular">{money(a.rrp)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {/* Absent SKUs — the panel that matters most (§4.2 step 3). */}
           {diff.absent.length > 0 && (

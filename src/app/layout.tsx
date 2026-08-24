@@ -4,7 +4,7 @@ import { SiteHeader } from "@/components/shell/SiteHeader";
 import { SiteFooter } from "@/components/shell/SiteFooter";
 import { OrderRail } from "@/components/order/OrderRail";
 import { EphemeralNotice } from "@/components/shell/EphemeralNotice";
-import { getFacets, getStockAsAt } from "@/lib/repo/catalogue";
+import { getFacets } from "@/lib/repo/catalogue";
 import { getSetting } from "@/lib/db";
 import { publicContactNumber } from "@/lib/domain/public-contact";
 import { isEphemeralStore, isIndexable, siteUrl } from "@/lib/runtime";
@@ -42,7 +42,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const announcement = await getSetting("announcement");
   const contactEmail = await getSetting("contact_email");
   const contactPhone = publicContactNumber(await getSetting("contact_phone")) ?? undefined;
-  const stockDate = await getStockAsAt();
 
   return (
     <html lang="en-AE">
@@ -76,7 +75,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           brands={facets.brands}
           categories={facets.categories}
           genders={facets.genders}
-          stockDate={stockDate}
           announcement={announcement}
         />
 
@@ -85,7 +83,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </main>
 
         <SiteFooter
-          stockDate={stockDate}
           categories={facets.categories}
           contactEmail={contactEmail}
           contactPhone={contactPhone}

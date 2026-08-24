@@ -14,6 +14,7 @@ import { audit, run, setSetting, uid, now, getSetting } from "@/lib/db";
 import { rateLimit, clientIp } from "@/lib/ratelimit";
 import {
   getQuoteById,
+  replaceQuoteLines,
   updateQuoteFields,
   updateQuoteStatus,
 } from "@/lib/repo/quotes";
@@ -88,10 +89,12 @@ export async function logout() {
 export async function setQuoteStatus(id: string, status: QuoteStatus) {
   await requireAdmin();
   if (!QUOTE_STATUSES.includes(status)) throw new Error("Unknown status.");
-  updateQuoteStatus(id, status);
+  await updateQuoteStatus(id, status);
   revalidatePath(`/admin/quotes/${id}`);
   revalidatePath("/admin/quotes");
   revalidatePath("/admin");
+  revalidatePath("/catalogue");
+  revalidatePath("/");
 }
 
 export async function saveQuoteDetails(id: string, formData: FormData) {
@@ -100,12 +103,78 @@ export async function saveQuoteDetails(id: string, formData: FormData) {
   const stripped = rawValue.replace(/[^\d.]/g, "");
   const parsed = stripped === "" ? null : Number(stripped);
 
-  updateQuoteFields(id, {
+  await updateQuoteFields(id, {
     quoted_value: parsed !== null && Number.isFinite(parsed) ? parsed : null,
     internal_notes: String(formData.get("internal_notes") ?? "") || null,
   });
 
   revalidatePath(`/admin/quotes/${id}`);
+}
+
+export async function saveQuoteEdit(
+  id: string,
+  formData: FormData,
+): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  const quote = await getQuoteById(id);
+  if (!quote) return { ok: false, message: "That request no longer exists." };
+
+  const notes = String(formData.get("notes") ?? "");
+  const logoNotes = String(formData.get("logo_notes") ?? "");
+  const rawLines = String(formData.get("lines") ?? "[]");
+
+  let parsed: { sku: string; quantity: number }[];
+  try {
+    parsed = JSON.parse(rawLines);
+  } catch {
+    return { ok: false, message: "Those lines could not be read." };
+  }
+
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    return { ok: false, message: "A request needs at least one line." };
+  }
+
+  const nextLines = [];
+  for (const incoming of parsed) {
+    const qty = Math.max(0, Math.floor(Number(incoming.quantity)));
+    if (!incoming.sku || qty <= 0) continue;
+    const existing = quote.lines.find((l) => l.sku === incoming.sku);
+    if (existing) {
+      nextLines.push({
+        sku: existing.sku,
+        article_number: existing.article_number,
+        brand: existing.brand,
+        style_name: existing.style_name,
+        colour: existing.colour,
+        size: existing.size,
+        quantity: qty,
+        unit_price: existing.unit_price,
+        rrp: existing.rrp,
+        branding_placements: existing.branding_placements,
+        stock_flag: existing.stock_flag,
+      });
+    }
+  }
+
+  if (nextLines.length === 0) {
+    return { ok: false, message: "A request needs at least one line with a quantity." };
+  }
+
+  try {
+    await replaceQuoteLines(id, nextLines, {
+      notes: notes.trim() || null,
+      logo_notes: logoNotes.trim() || null,
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Could not save those changes.",
+    };
+  }
+
+  revalidatePath(`/admin/quotes/${id}`);
+  revalidatePath("/admin/quotes");
+  return { ok: true, message: "Request updated." };
 }
 
 export async function resendNotifications(id: string): Promise<{ message: string }> {
@@ -182,7 +251,7 @@ export async function saveProduct(id: string, formData: FormData) {
   await run(
     `UPDATE products SET
        style_name = ?, colour = ?, category = ?, gender = ?,
-       description = ?, fabric = ?, season = ?, colour_hex = ?,
+       description = ?, fabric = ?, features = ?, benefits = ?, season = ?, colour_hex = ?,
        price_wholesale = ?, rrp = ?, case_pack = ?, moq = ?,
        is_visible = ?, is_discontinued = ?, sort_order = ?,
        needs_review = ?, updated_at = ?
@@ -193,6 +262,8 @@ export async function saveProduct(id: string, formData: FormData) {
     gender,
     String(formData.get("description") ?? "") || null,
     String(formData.get("fabric") ?? "") || null,
+    String(formData.get("features") ?? "") || null,
+    String(formData.get("benefits") ?? "") || null,
     String(formData.get("season") ?? "") || null,
     String(formData.get("colour_hex") ?? "") || null,
     num("price_wholesale"),
@@ -301,14 +372,23 @@ const EDITABLE_SETTINGS = [
   "branding_min_units",
   "quote_response_hours",
   "show_non_new_stock",
+  "home_kicker",
+  "home_headline",
+  "home_body",
+  "home_cta_label",
+  "home_cta_href",
+  "carousel_enabled",
+  "carousel_title",
+  "carousel_articles",
 ];
 
 export async function saveSettings(formData: FormData) {
   await requireAdmin();
   for (const key of EDITABLE_SETTINGS) {
     if (!formData.has(key)) {
-      // Unchecked checkboxes are absent from the payload entirely.
-      if (key === "show_non_new_stock") await setSetting(key, "false");
+      // Unchecked checkboxes are absent. Only clear them when the form
+      // that owns that checkbox is the one that posted.
+      if (formData.get(`_present_${key}`) === "1") await setSetting(key, "false");
       continue;
     }
     const raw = formData.get(key);
@@ -319,6 +399,7 @@ export async function saveSettings(formData: FormData) {
   await audit("settings.update");
   revalidatePath("/admin/settings");
   revalidatePath("/", "layout");
+  revalidatePath("/");
 }
 
 export async function getAnnouncement(): Promise<string> {

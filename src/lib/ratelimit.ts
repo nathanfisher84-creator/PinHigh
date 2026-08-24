@@ -112,9 +112,10 @@ export function clientIp(headers: Headers): string {
 
 export async function verifyTurnstile(token: string | undefined, ip: string): Promise<boolean> {
   const secret = process.env.TURNSTILE_SECRET_KEY;
-  // Not configured means not enforced. The honeypot still applies, and blocking
-  // every submission because a key is missing would take the business offline.
-  if (!secret) return true;
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  // Not configured means not enforced. A secret without a site key cannot
+  // render a widget, so requiring a token would block every real buyer.
+  if (!secret || !siteKey) return true;
   if (!token) return false;
 
   try {

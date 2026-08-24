@@ -2,13 +2,13 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   getCategoryCounts,
-  getStockAsAt,
+  getProductByArticle,
   listCatalogue,
 } from "@/lib/repo/catalogue";
 import { getCatalogueTotals } from "@/lib/repo/catalogue";
 import { ProductCard } from "@/components/catalogue/ProductCard";
 import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
-import { stockAsAt } from "@/lib/format";
+import { getSetting } from "@/lib/db";
 
 /**
  * Landing page — premium retail anatomy, B2B content.
@@ -65,11 +65,36 @@ const ICONS = {
 
 export default async function HomePage() {
   const counts = await getCategoryCounts();
-  const stockDate = await getStockAsAt();
   const totals = await getCatalogueTotals();
   const cards = await listCatalogue({ sort: "stock" });
   const bestStocked = cards.filter((c) => c.total_quantity > 0).slice(0, 6);
   const liveCategories = CATEGORY_ORDER.filter((c) => (counts.get(c) ?? 0) > 0).slice(0, 6);
+
+  const kicker = (await getSetting("home_kicker")) || "AN ADIDAS OFFICIAL B2B PARTNER";
+  const headline = (await getSetting("home_headline")) || "The whole golf day.\nOne warehouse.";
+  const body =
+    (await getSetting("home_body")) ||
+    "Tournaments, client gifting, staff kit — specified by the size run, embroidered with your logo, quoted within a day.";
+  const ctaLabel = (await getSetting("home_cta_label")) || "Browse the catalogue";
+  const ctaHref = (await getSetting("home_cta_href")) || "/catalogue";
+  const carouselOn = (await getSetting("carousel_enabled")) === "true";
+  const carouselTitle = (await getSetting("carousel_title")) || "New in";
+  const carouselArticles = (await getSetting("carousel_articles"))
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const carouselCards = [];
+  if (carouselOn && carouselArticles.length) {
+    for (const article of carouselArticles) {
+      const product = await getProductByArticle(article);
+      if (!product) continue;
+      const card = cards.find((c) =>
+        c.colourways.some((cw) => cw.article_number === product.article_number),
+      );
+      if (card) carouselCards.push(card);
+    }
+  }
 
   /** A representative photograph per category tile. */
   const tileImage = (c: Category) =>
@@ -95,22 +120,29 @@ export default async function HomePage() {
         />
         <div className="relative mx-auto w-full max-w-[110rem] px-5 py-20 sm:px-8 lg:px-12">
           <p className="label-caps text-on-fairway-dim">
-            Genuine adidas golf · held in stock in Dubai
+            {kicker}
           </p>
           <h1 className="mt-5 display max-w-[13ch] text-4xl uppercase sm:text-5xl lg:text-6xl">
-            The whole golf day.{" "}
-            <span className="text-fairway-bright">One warehouse.</span>
+            {headline.split("\n").map((line, i, arr) => (
+              <span key={i}>
+                {i === arr.length - 1 ? (
+                  <span className="text-fairway-bright">{line}</span>
+                ) : (
+                  line
+                )}
+                {i < arr.length - 1 && " "}
+              </span>
+            ))}
           </h1>
           <p className="mt-6 max-w-md text-lg text-on-fairway-dim">
-            Tournaments, client gifting, staff kit — specified by the size run,
-            embroidered with your logo, quoted within a day.
+            {body}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/catalogue"
+              href={ctaHref.startsWith("/") ? ctaHref : "/catalogue"}
               className="bg-fairway-bright px-7 py-3.5 text-sm font-semibold uppercase tracking-[0.08em] text-fairway-deep hover:bg-on-fairway transition-colors duration-150"
             >
-              Browse the catalogue
+              {ctaLabel}
             </Link>
             <Link
               href="/contact"
@@ -129,7 +161,7 @@ export default async function HomePage() {
             {
               icon: ICONS.warehouse,
               title: "Stock held in Dubai",
-              sub: `${totals.units.toLocaleString("en-AE")} units · ${stockAsAt(stockDate)}`,
+              sub: `${totals.units.toLocaleString("en-AE")} units held here`,
             },
             {
               icon: ICONS.needle,
@@ -161,6 +193,24 @@ export default async function HomePage() {
           ))}
         </ul>
       </section>
+
+      {carouselOn && carouselCards.length > 0 && (
+        <section className="mx-auto max-w-[110rem] px-5 py-14 sm:px-8 lg:px-12">
+          <h2 className="text-center text-sm font-semibold uppercase tracking-[0.14em]">
+            {carouselTitle}
+          </h2>
+          <ul className="mt-8 flex gap-4 overflow-x-auto scroll-x pb-2">
+            {carouselCards.map((card, i) => (
+              <li
+                key={card.style_group ?? card.article_number}
+                className="w-44 shrink-0 sm:w-52"
+              >
+                <ProductCard card={card} priority={i < 4} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* ── Category tiles. ─────────────────────────────────────────────── */}
       {liveCategories.length > 0 && (
@@ -297,7 +347,7 @@ export default async function HomePage() {
       <section className="on-fairway">
         <ul className="mx-auto grid max-w-[110rem] grid-cols-2 gap-x-6 gap-y-4 px-5 py-6 sm:px-8 lg:grid-cols-4 lg:px-12">
           {[
-            "Genuine adidas stock",
+            "AN ADIDAS OFFICIAL B2B PARTNER",
             "Full size runs XS–4XL",
             "Embroidery in Dubai",
             "Quoted in AED, excl. VAT",
@@ -320,11 +370,14 @@ export default async function HomePage() {
           <p className="measure text-sm text-graphite-ink">
             Pin High supplies companies rather than individual golfers — there is
             no checkout here and we quote by the size run. If you need one or two
-            pieces,{" "}
-            <Link href="/contact" className="underline underline-offset-2 hover:text-fairway">
-              get in touch
-            </Link>{" "}
-            and we will point you at a retailer.
+            pieces, visit{" "}
+            <a
+              href="https://pinhighuae.com"
+              className="underline underline-offset-2 hover:text-fairway"
+            >
+              pinhighuae.com
+            </a>
+            .
           </p>
         </div>
       </section>

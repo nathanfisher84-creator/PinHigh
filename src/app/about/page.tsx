@@ -44,10 +44,10 @@ export default async function AboutPage() {
             unpicking a transaction afterwards.
           </p>
           <p>
-            We do not publish prices. What a corporate order costs depends on the
-            quantity, the branding and the delivery, so we price each request on
-            its own rather than putting a figure on a page that would be wrong for
-            most people who read it. Quotes are in AED and exclude 5% UAE VAT.
+            We publish the retail RRP in AED so you can see the recommended
+            retail. What a corporate order costs still depends on quantity,
+            branding and delivery, so the quote is priced on its own. Quotes are
+            in AED and exclude 5% UAE VAT.
           </p>
         </div>
       </section>
@@ -56,10 +56,9 @@ export default async function AboutPage() {
         <h2 className="text-xl">Stock</h2>
         <div className="mt-4 space-y-4 text-graphite-ink">
           <p>
-            Availability on this site comes from our own stock file, and every
-            page tells you the date that file was uploaded. It is not a live
-            feed — if a size run matters to you, ask and we will check it against
-            the warehouse before you commit to anything.
+            Availability on this site comes from our own stock file. It is not a
+            live feed — if a size run matters to you, ask and we will check it
+            against the warehouse before you commit to anything.
           </p>
           <p>
             Where we list pre-owned or ex-display equipment, it is labelled as
