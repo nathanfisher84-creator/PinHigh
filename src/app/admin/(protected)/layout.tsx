@@ -33,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <div className="flex h-14 items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <Link href="/admin" aria-label="Admin home">
-                <Logo />
+                <Logo size="compact" />
               </Link>
               <span className="label-caps hidden sm:inline">Admin</span>
             </div>

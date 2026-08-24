@@ -61,19 +61,13 @@ export default async function BrandPage({
     sort: query.sort as never,
   });
 
-  const totalUnits = cards.reduce(
-    (n, c) => n + c.colourways.reduce((m, cw) => m + cw.total_quantity, 0),
-    0,
-  );
-
   return (
     <>
       <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12 pt-14 pb-8">
         <p className="label-caps">Brand</p>
         <h1 className="mt-3 display text-4xl uppercase lg:text-5xl">{resolved}</h1>
         <p className="mt-2 tabular text-sm text-graphite-ink">
-          {cards.length} {cards.length === 1 ? "style" : "styles"} ·{" "}
-          {totalUnits.toLocaleString("en-AE")} units in stock
+          {cards.length} {cards.length === 1 ? "style" : "styles"}
         </p>
       </div>
 

@@ -5,7 +5,6 @@ import {
   getProductByArticle,
   listCatalogue,
 } from "@/lib/repo/catalogue";
-import { getCatalogueTotals } from "@/lib/repo/catalogue";
 import { ProductCard } from "@/components/catalogue/ProductCard";
 import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
 import { getSetting } from "@/lib/db";
@@ -65,7 +64,6 @@ const ICONS = {
 
 export default async function HomePage() {
   const counts = await getCategoryCounts();
-  const totals = await getCatalogueTotals();
   const cards = await listCatalogue({ sort: "stock" });
   const bestStocked = cards.filter((c) => c.total_quantity > 0).slice(0, 6);
   const liveCategories = CATEGORY_ORDER.filter((c) => (counts.get(c) ?? 0) > 0).slice(0, 6);
@@ -160,8 +158,8 @@ export default async function HomePage() {
           {[
             {
               icon: ICONS.warehouse,
-              title: "Stock held in Dubai",
-              sub: `${totals.units.toLocaleString("en-AE")} units held here`,
+              title: "Held in our warehouse",
+              sub: "Quoted from stock we hold",
             },
             {
               icon: ICONS.needle,
