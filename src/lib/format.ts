@@ -50,7 +50,18 @@ export function units(n: number): string {
  */
 export const PRICE_ON_REQUEST = "Price on request";
 export const PRICE_NOTE =
-  "We price each request on its own — quantity, branding and delivery together.";
+  "We price each request on its own — quantity, branding and delivery together. Retail RRP is not the quote.";
+
+export const RETAIL_RRP_LABEL = "Retail RRP (AED)";
+export const RETAIL_RRP_NOTE =
+  "Recommended retail price in AED. This is not your quote — we price quantity, branding and delivery separately.";
+
+export function retailRrp(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "Retail RRP on request";
+  }
+  return `${RETAIL_RRP_LABEL} ${money(value)}`;
+}
 
 /** Retained for the admin and the internal notification only. */
 export const PRICE_CAVEAT = "Indicative — excl. VAT, branding and delivery";

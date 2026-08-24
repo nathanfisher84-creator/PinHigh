@@ -86,13 +86,13 @@ export function Logo({ className, tone = "light", withMark = true }: LogoProps) 
   const highFill = tone === "dark" ? "#FFFFFF" : NAVY;
   return (
     <span
-      className={`inline-flex items-center gap-2.5 ${className ?? ""}`}
+      className={`inline-flex items-center gap-3 ${className ?? ""}`}
       role="img"
       aria-label="Pin High"
     >
-      {withMark && <Mark size={30} />}
+      {withMark && <Mark size={44} />}
       <svg
-        height="20"
+        height="28"
         viewBox="0 0 176 30"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"

@@ -9,6 +9,8 @@ import {
 } from "@/lib/validation/quote";
 import { quoteLinesCsv } from "@/lib/notify/csv";
 import { buildTemplateParameters } from "@/lib/notify/whatsapp";
+import { quoteRequestWorkbook } from "@/lib/quotes/excel";
+import { readWorkbook } from "@/lib/xlsx/read";
 import type { QuoteRequestWithLines } from "@/lib/domain/types";
 
 const validInput = {
@@ -129,6 +131,7 @@ const quote = {
   logo_path: null,
   logo_notes: null,
   status: "new",
+  stock_applied: false,
   quoted_value: null,
   internal_notes: null,
   notified_email: [],
@@ -148,10 +151,12 @@ const quote = {
       quantity: 24,
       unit_price: 78,
       line_total: 1872,
+      rrp: 250,
       branding_placements: ["Left chest"],
       stock_flag: null,
     },
   ],
+  logos: [],
 } as unknown as QuoteRequestWithLines;
 
 describe("CSV export", () => {
@@ -160,7 +165,10 @@ describe("CSV export", () => {
     const rows = csv.trim().split("\r\n");
     assert.equal(rows.length, 2);
     assert.ok(rows[0].includes("Article Number"));
+    assert.ok(rows[0].includes("Retail RRP (AED)"));
+    assert.ok(!rows[0].toLowerCase().includes("wholesale"));
     assert.ok(rows[1].includes("41001"));
+    assert.ok(rows[1].includes("250"));
   });
 
   test("neutralises formula injection", () => {
@@ -216,5 +224,18 @@ describe("WhatsApp template parameters", () => {
   test("a missing date reads as 'not specified' rather than blank", () => {
     const params = buildTemplateParameters({ ...quote, required_by: null });
     assert.equal(params[6], "not specified");
+  });
+});
+
+describe("Excel download of a quote request", () => {
+  test("writes a real .xlsx with retail RRP, not wholesale", () => {
+    const buf = quoteRequestWorkbook(quote);
+    assert.equal(buf.readUInt32LE(0), 0x04034b50);
+    const wb = readWorkbook(buf, "PH-Q-2026-0417.xlsx");
+    const cells = wb.sheets[0].rows.flat().map(String);
+    assert.ok(cells.some((c) => c.includes("Retail RRP")));
+    assert.ok(cells.includes("250"));
+    assert.ok(!cells.some((c) => /wholesale|cost from adidas/i.test(c)));
+    assert.ok(cells.includes("PH-Q-2026-0417"));
   });
 });

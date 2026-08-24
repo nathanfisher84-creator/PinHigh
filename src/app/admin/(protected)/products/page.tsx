@@ -23,6 +23,8 @@ export interface AdminProductRow {
   condition: string;
   description: string | null;
   fabric: string | null;
+  features: string | null;
+  benefits: string | null;
   season: string | null;
   price_wholesale: number | null;
   rrp: number | null;

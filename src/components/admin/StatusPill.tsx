@@ -9,8 +9,10 @@ const STYLES: Record<QuoteStatus, string> = {
   new: "bg-fairway text-paper",
   in_progress: "bg-sand text-ink",
   quoted: "border border-fairway text-fairway",
+  approved: "bg-fairway px-2 text-paper",
   won: "bg-fairway-wash text-fairway border border-fairway",
   lost: "border border-sand text-graphite-ink",
+  cancelled: "border border-sand text-graphite-ink",
   expired: "border border-sand text-graphite-ink line-through decoration-1",
 };
 

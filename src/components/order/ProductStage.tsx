@@ -4,39 +4,32 @@ import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProductImage } from "@/components/catalogue/ProductImage";
 import {
+  addLogoToBoard,
   applyLogoKey,
   clampCoord,
-  clampScale,
-  DEFAULT_TRANSFORM,
-  MAX_SCALE,
-  MIN_SCALE,
-  normalizeRotation,
+  EMPTY_BOARD,
+  placeLogoOnView,
   pointerAngleDeg,
   pointerDistance,
-  readLogoState,
+  readLogoBoard,
+  removeLogoFromBoard,
+  removePlacement,
   rotationFromDrag,
   scaleFromHandleDrag,
-  writeLogoState,
-  type LogoState,
+  updatePlacement,
+  writeLogoBoard,
+  type LogoBoard,
+  type ViewPlacement,
 } from "@/lib/logo-preview";
 
 /**
- * The product stage: every angle the supplier pack carried, plus the buyer's
- * own logo laid over the photograph.
+ * Product stage: every angle shown together, with logos placed independently
+ * on more than one view (chest and back in one go, not a single overlay).
  *
- * The logo never leaves the browser. Previewing is a decision aid, not an
- * order artefact — the real artwork is uploaded with the quote request, where
- * it is stored privately (§8). Keeping the preview client-side makes it
- * instant, keeps trademarks off our servers until the buyer actually asks for
- * a quote, and means there is nothing to moderate.
- *
- * The logo is remembered in localStorage, so a buyer who uploads it once can
- * walk the whole catalogue trying it on everything — which is the point.
- * Position, size and rotation travel with it.
+ * Preview stays in the browser. Real artwork is uploaded with the quote.
  */
 
 const MAX_LOGO_BYTES = 4 * 1024 * 1024;
-/** Stored downscaled: localStorage is small and a preview needs no more. */
 const MAX_LOGO_EDGE = 600;
 
 const RESIZE_HANDLES = [
@@ -56,16 +49,14 @@ interface Props {
   articleNumber: string;
   styleName: string;
   colour: string;
-  /** Rendered top-right over the stage (the condition tag). */
   badge?: React.ReactNode;
 }
 
 type Gesture =
-  | { type: "move"; pointerId: number; dx: number; dy: number }
-  | { type: "resize"; pointerId: number; startScale: number; startDist: number }
-  | { type: "rotate"; pointerId: number; startRotation: number; startAngle: number };
+  | { type: "move"; pointerId: number; placementId: string; dx: number; dy: number }
+  | { type: "resize"; pointerId: number; placementId: string; startScale: number; startDist: number }
+  | { type: "rotate"; pointerId: number; placementId: string; startRotation: number; startAngle: number };
 
-/** Downscale raster logos on a canvas; keep SVGs as they are (they scale). */
 async function fileToDataUrl(file: File): Promise<string> {
   if (file.type === "image/svg+xml") {
     return new Promise((resolve, reject) => {
@@ -84,47 +75,40 @@ async function fileToDataUrl(file: File): Promise<string> {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("no canvas");
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  // PNG keeps transparency, which almost every logo has.
   return canvas.toDataURL("image/png");
 }
 
-function persist(state: LogoState | null) {
+function persist(board: LogoBoard) {
   if (typeof window === "undefined") return;
-  writeLogoState(window.localStorage, state);
+  writeLogoBoard(window.localStorage, board);
 }
 
 export function ProductStage({ images, articleNumber, styleName, colour, badge }: Props) {
-  const [index, setIndex] = useState(0);
-  const [logo, setLogo] = useState<LogoState | null>(null);
+  const [board, setBoard] = useState<LogoBoard>(EMPTY_BOARD);
+  const [selectedLogoId, setSelectedLogoId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const gestureRef = useRef<Gesture | null>(null);
-  const logoRef = useRef<LogoState | null>(null);
+  const boardRef = useRef(board);
   const readyRef = useRef(false);
-
-  logoRef.current = logo;
+  boardRef.current = board;
   readyRef.current = ready;
 
-  const current = images[Math.min(index, Math.max(0, images.length - 1))] ?? null;
-
-  // A logo uploaded on another product page is picked up here automatically,
-  // including the last position, size and rotation.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const stored = readLogoState(window.localStorage);
-    if (stored) setLogo(stored);
+    const stored = readLogoBoard(window.localStorage);
+    setBoard(stored);
+    setSelectedLogoId(stored.logos[0]?.id ?? null);
     setReady(true);
   }, []);
 
   useEffect(() => {
-    if (!ready || gestureRef.current) return;
-    persist(logo);
-  }, [logo, ready]);
+    if (!ready) return;
+    persist(board);
+  }, [board, ready]);
 
   useEffect(() => {
     return () => {
-      if (readyRef.current) persist(logoRef.current);
+      if (readyRef.current) persist(boardRef.current);
     };
   }, []);
 
@@ -137,70 +121,175 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
     }
     try {
       const dataUrl = await fileToDataUrl(file);
-      setLogo((currentLogo) => ({
-        dataUrl,
-        x: currentLogo?.x ?? DEFAULT_TRANSFORM.x,
-        y: currentLogo?.y ?? DEFAULT_TRANSFORM.y,
-        scale: currentLogo?.scale ?? DEFAULT_TRANSFORM.scale,
-        rotation: currentLogo?.rotation ?? DEFAULT_TRANSFORM.rotation,
-      }));
+      setBoard((current) => {
+        const next = addLogoToBoard(current, dataUrl);
+        setSelectedLogoId(next.logos[next.logos.length - 1]?.id ?? null);
+        return next;
+      });
     } catch {
       setError("That file couldn't be read as an image. PNG with transparency works best.");
     }
   };
 
-  const clearLogo = () => {
-    setLogo(null);
-  };
+  const views = images.length > 0 ? images : [{ url: "", alt: null }];
+  const showGrid = views.length > 1;
 
-  const stageCentre = () => {
-    const box = stageRef.current?.getBoundingClientRect();
-    const currentLogo = logoRef.current;
-    if (!box || !currentLogo) return null;
-    return {
-      box,
-      cx: box.left + currentLogo.x * box.width,
-      cy: box.top + currentLogo.y * box.height,
-    };
-  };
+  return (
+    <div>
+      <div className={showGrid ? "grid gap-3 sm:grid-cols-2" : ""}>
+        {views.map((img, i) => (
+          <ViewCanvas
+            key={img.url || `empty-${i}`}
+            image={img}
+            articleNumber={articleNumber}
+            styleName={styleName}
+            colour={colour}
+            badge={i === 0 ? badge : undefined}
+            board={board}
+            setBoard={setBoard}
+            selectedLogoId={selectedLogoId}
+            label={img.alt ?? `View ${i + 1}`}
+          />
+        ))}
+      </div>
+
+      <div className="mt-3 hairline bg-paper-raised px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+          <label className="flex min-h-11 cursor-pointer items-center font-medium underline underline-offset-2 hover:text-fairway">
+            {board.logos.length ? "Add another logo" : "See your logo on this"}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              className="sr-only"
+              onChange={(e) => onUpload(e.target.files?.[0])}
+            />
+          </label>
+          <span className="text-xs text-graphite-ink">
+            Place a mark on the chest and another on the back — every view stays on screen.
+          </span>
+        </div>
+
+        {board.logos.length > 0 && (
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {board.logos.map((logo, i) => (
+              <li key={logo.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLogoId(logo.id)}
+                  aria-pressed={selectedLogoId === logo.id}
+                  className={[
+                    "flex items-center gap-2 border px-2 py-1 text-xs",
+                    selectedLogoId === logo.id ? "border-ink" : "border-sand hover:border-graphite",
+                  ].join(" ")}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={logo.dataUrl} alt="" className="h-6 w-6 object-contain" />
+                  Logo {i + 1}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBoard((b) => removeLogoFromBoard(b, logo.id));
+                    setSelectedLogoId((id) => (id === logo.id ? null : id));
+                  }}
+                  className="ml-1 text-xs text-graphite-ink underline underline-offset-2 hover:text-flag-ink"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {error && (
+          <p className="mt-1.5 text-xs text-flag-ink" role="alert">
+            {error}
+          </p>
+        )}
+        {board.logos.length > 0 && (
+          <p className="mt-1.5 text-xs text-graphite-ink">
+            Select a logo, then “Place on this view” under a photograph. Drag, resize and rotate
+            each mark on its own view. Visual mock-up only — we confirm application with your quote.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ViewCanvas({
+  image,
+  articleNumber,
+  styleName,
+  colour,
+  badge,
+  board,
+  setBoard,
+  selectedLogoId,
+  label,
+}: {
+  image: StageImage;
+  articleNumber: string;
+  styleName: string;
+  colour: string;
+  badge?: React.ReactNode;
+  board: LogoBoard;
+  setBoard: React.Dispatch<React.SetStateAction<LogoBoard>>;
+  selectedLogoId: string | null;
+  label: string;
+}) {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const gestureRef = useRef<Gesture | null>(null);
+  const boardRef = useRef(board);
+  boardRef.current = board;
+
+  const placements = board.placements.filter((p) => p.viewUrl === image.url);
 
   const applyGesture = useCallback((e: PointerEvent) => {
     const gesture = gestureRef.current;
     const box = stageRef.current?.getBoundingClientRect();
     if (!gesture || gesture.pointerId !== e.pointerId || !box) return;
+    const current = boardRef.current.placements.find((p) => p.id === gesture.placementId);
+    if (!current) return;
 
     if (gesture.type === "move") {
       const x = (e.clientX - box.left) / box.width - gesture.dx;
       const y = (e.clientY - box.top) / box.height - gesture.dy;
-      setLogo((l) =>
-        l ? { ...l, x: clampCoord(x, l.x), y: clampCoord(y, l.y) } : l,
+      setBoard((b) =>
+        updatePlacement(b, gesture.placementId, {
+          x: clampCoord(x, current.x),
+          y: clampCoord(y, current.y),
+        }),
       );
       return;
     }
 
-    const currentLogo = logoRef.current;
-    if (!currentLogo) return;
-    const cx = box.left + currentLogo.x * box.width;
-    const cy = box.top + currentLogo.y * box.height;
+    const cx = box.left + current.x * box.width;
+    const cy = box.top + current.y * box.height;
 
     if (gesture.type === "resize") {
       const dist = pointerDistance(cx, cy, e.clientX, e.clientY);
-      const scale = scaleFromHandleDrag(gesture.startScale, gesture.startDist, dist);
-      setLogo((l) => (l ? { ...l, scale } : l));
+      setBoard((b) =>
+        updatePlacement(b, gesture.placementId, {
+          scale: scaleFromHandleDrag(gesture.startScale, gesture.startDist, dist),
+        }),
+      );
       return;
     }
 
     const angle = pointerAngleDeg(cx, cy, e.clientX, e.clientY);
-    const rotation = rotationFromDrag(gesture.startRotation, gesture.startAngle, angle, e.shiftKey);
-    setLogo((l) => (l ? { ...l, rotation } : l));
-  }, []);
+    setBoard((b) =>
+      updatePlacement(b, gesture.placementId, {
+        rotation: rotationFromDrag(gesture.startRotation, gesture.startAngle, angle, e.shiftKey),
+      }),
+    );
+  }, [setBoard]);
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => applyGesture(e);
     const onUp = (e: PointerEvent) => {
       if (gestureRef.current?.pointerId !== e.pointerId) return;
       gestureRef.current = null;
-      persist(logoRef.current);
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -212,81 +301,28 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
     };
   }, [applyGesture]);
 
-  const bindGesture = (gesture: Gesture) => {
-    gestureRef.current = gesture;
-  };
-
-  const onMovePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const currentLogo = logoRef.current;
+  const centreOf = (placement: ViewPlacement) => {
     const box = stageRef.current?.getBoundingClientRect();
-    if (!currentLogo || !box) return;
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    bindGesture({
-      type: "move",
-      pointerId: e.pointerId,
-      dx: (e.clientX - box.left) / box.width - currentLogo.x,
-      dy: (e.clientY - box.top) / box.height - currentLogo.y,
-    });
+    if (!box) return null;
+    return {
+      box,
+      cx: box.left + placement.x * box.width,
+      cy: box.top + placement.y * box.height,
+    };
   };
-
-  const onResizePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const centre = stageCentre();
-    const currentLogo = logoRef.current;
-    if (!centre || !currentLogo) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    bindGesture({
-      type: "resize",
-      pointerId: e.pointerId,
-      startScale: currentLogo.scale,
-      startDist: pointerDistance(centre.cx, centre.cy, e.clientX, e.clientY),
-    });
-  };
-
-  const onRotatePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const centre = stageCentre();
-    const currentLogo = logoRef.current;
-    if (!centre || !currentLogo) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    bindGesture({
-      type: "rotate",
-      pointerId: e.pointerId,
-      startRotation: currentLogo.rotation,
-      startAngle: pointerAngleDeg(centre.cx, centre.cy, e.clientX, e.clientY),
-    });
-  };
-
-  /** Arrow keys nudge; [ ] rotate; - = resize. The stage is usable without a mouse (§11). */
-  const onLogoKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
-    if (!logo) return;
-    const next = applyLogoKey(logo, e.key, e.shiftKey);
-    if (!next) return;
-    e.preventDefault();
-    setLogo(next);
-  };
-
-  const degrees = logo ? Math.round(normalizeRotation(logo.rotation)) : 0;
-  const sizePercent = logo ? Math.round(logo.scale * 100) : 0;
 
   return (
     <div>
-      {/* Stage */}
       <div
         ref={stageRef}
         className="relative aspect-[4/5] bg-paper-sunken hairline overflow-hidden"
       >
-        {current ? (
+        {image.url ? (
           <Image
-            key={current.url}
-            src={current.url}
-            alt={current.alt ?? `${styleName} in ${colour}`}
+            src={image.url}
+            alt={image.alt ?? `${styleName} in ${colour}`}
             fill
             sizes="(max-width: 1024px) 100vw, 50vw"
-            priority
             className="object-cover select-none"
             draggable={false}
           />
@@ -296,197 +332,159 @@ export function ProductStage({ images, articleNumber, styleName, colour, badge }
             alt={`${styleName} in ${colour}`}
             articleNumber={articleNumber}
             sizes="(max-width: 1024px) 100vw, 50vw"
-            priority
           />
         )}
 
         {badge && <span className="absolute right-0 top-0 z-10">{badge}</span>}
 
-        {logo && current && (
-          <div
-            className="absolute z-20 touch-none"
-            style={{
-              left: `${logo.x * 100}%`,
-              top: `${logo.y * 100}%`,
-              width: `${logo.scale * 100}%`,
-              transform: `translate(-50%, -50%) rotate(${logo.rotation}deg)`,
-            }}
-          >
-            <button
-              type="button"
-              aria-label="Your logo — drag or use arrow keys to position it. Square brackets rotate, minus and plus resize."
-              onPointerDown={onMovePointerDown}
-              onKeyDown={onLogoKeyDown}
-              className="relative block w-full cursor-grab bg-transparent p-0 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-fairway"
+        {placements.map((placement) => {
+          const logo = board.logos.find((l) => l.id === placement.logoId);
+          if (!logo) return null;
+          return (
+            <div
+              key={placement.id}
+              className="absolute z-20 touch-none"
+              style={{
+                left: `${placement.x * 100}%`,
+                top: `${placement.y * 100}%`,
+                width: `${placement.scale * 100}%`,
+                transform: `translate(-50%, -50%) rotate(${placement.rotation}deg)`,
+              }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element -- data URL from the buyer's own file */}
-              <img
-                src={logo.dataUrl}
-                alt=""
-                draggable={false}
-                className="pointer-events-none h-auto w-full select-none drop-shadow-[0_1px_2px_rgba(20,24,26,0.25)]"
-              />
+              <button
+                type="button"
+                aria-label="Your logo — drag or use arrow keys to position it."
+                onPointerDown={(e) => {
+                  const box = stageRef.current?.getBoundingClientRect();
+                  if (!box) return;
+                  e.preventDefault();
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  gestureRef.current = {
+                    type: "move",
+                    pointerId: e.pointerId,
+                    placementId: placement.id,
+                    dx: (e.clientX - box.left) / box.width - placement.x,
+                    dy: (e.clientY - box.top) / box.height - placement.y,
+                  };
+                }}
+                onKeyDown={(e) => {
+                  const asState = {
+                    dataUrl: logo.dataUrl,
+                    x: placement.x,
+                    y: placement.y,
+                    scale: placement.scale,
+                    rotation: placement.rotation,
+                  };
+                  const next = applyLogoKey(asState, e.key, e.shiftKey);
+                  if (!next) return;
+                  e.preventDefault();
+                  setBoard((b) =>
+                    updatePlacement(b, placement.id, {
+                      x: next.x,
+                      y: next.y,
+                      scale: next.scale,
+                      rotation: next.rotation,
+                    }),
+                  );
+                }}
+                className="relative block w-full cursor-grab bg-transparent p-0 active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-fairway"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={logo.dataUrl}
+                  alt=""
+                  draggable={false}
+                  className="pointer-events-none h-auto w-full select-none drop-shadow-[0_1px_2px_rgba(20,24,26,0.25)]"
+                />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 border border-ink/70"
+                />
+              </button>
+
+              {RESIZE_HANDLES.map((handle) => (
+                <button
+                  key={handle.id}
+                  type="button"
+                  aria-label={handle.label}
+                  onPointerDown={(e) => {
+                    const centre = centreOf(placement);
+                    if (!centre) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    gestureRef.current = {
+                      type: "resize",
+                      pointerId: e.pointerId,
+                      placementId: placement.id,
+                      startScale: placement.scale,
+                      startDist: pointerDistance(centre.cx, centre.cy, e.clientX, e.clientY),
+                    };
+                  }}
+                  className={`absolute z-30 flex h-11 w-11 items-center justify-center ${handle.className}`}
+                  style={{ cursor: handle.cursor }}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="block h-2.5 w-2.5 border border-ink bg-paper-raised shadow-[0_0_0_1px_rgba(250,250,248,0.85)]"
+                  />
+                </button>
+              ))}
+
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-0 border border-ink/70"
+                className="pointer-events-none absolute left-1/2 top-0 z-20 h-5 w-px -translate-x-1/2 -translate-y-full bg-ink/70"
               />
-            </button>
-
-            {RESIZE_HANDLES.map((handle) => (
               <button
-                key={handle.id}
                 type="button"
-                aria-label={handle.label}
-                onPointerDown={onResizePointerDown}
-                onKeyDown={onLogoKeyDown}
-                className={`absolute z-30 flex h-11 w-11 items-center justify-center ${handle.className}`}
-                style={{ cursor: handle.cursor }}
+                aria-label="Rotate logo. Hold Shift to snap to 15 degrees."
+                onPointerDown={(e) => {
+                  const centre = centreOf(placement);
+                  if (!centre) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  gestureRef.current = {
+                    type: "rotate",
+                    pointerId: e.pointerId,
+                    placementId: placement.id,
+                    startRotation: placement.rotation,
+                    startAngle: pointerAngleDeg(centre.cx, centre.cy, e.clientX, e.clientY),
+                  };
+                }}
+                className="absolute left-1/2 top-0 z-30 flex h-11 w-11 -translate-x-1/2 -translate-y-[calc(100%+4px)] items-center justify-center"
               >
                 <span
                   aria-hidden="true"
-                  className="block h-2.5 w-2.5 border border-ink bg-paper-raised shadow-[0_0_0_1px_rgba(250,250,248,0.85)]"
-                />
+                  className="flex h-7 w-7 items-center justify-center border border-ink bg-paper-raised text-ink"
+                >
+                  <RotateGlyph />
+                </span>
               </button>
-            ))}
 
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute left-1/2 top-0 z-20 h-5 w-px -translate-x-1/2 -translate-y-full bg-ink/70"
-            />
-            <button
-              type="button"
-              aria-label="Rotate logo. Hold Shift to snap to 15 degrees."
-              onPointerDown={onRotatePointerDown}
-              onKeyDown={onLogoKeyDown}
-              className="absolute left-1/2 top-0 z-30 flex h-11 w-11 -translate-x-1/2 -translate-y-[calc(100%+4px)] items-center justify-center"
-            >
-              <span
-                aria-hidden="true"
-                className="flex h-7 w-7 items-center justify-center border border-ink bg-paper-raised text-ink"
+              <button
+                type="button"
+                aria-label="Remove this logo from this view"
+                onClick={() => setBoard((b) => removePlacement(b, placement.id))}
+                className="absolute -right-3 -top-3 z-40 flex h-7 w-7 items-center justify-center border border-ink bg-paper-raised text-xs"
               >
-                <RotateGlyph />
-              </span>
-            </button>
-          </div>
-        )}
+                ×
+              </button>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Angles */}
-      {images.length > 1 && (
-        <div className="mt-2 flex gap-2 overflow-x-auto scroll-x" role="group" aria-label="Product views">
-          {images.map((img, i) => (
-            <button
-              key={img.url}
-              type="button"
-              onClick={() => setIndex(i)}
-              aria-pressed={i === index}
-              aria-label={img.alt ?? `View ${i + 1}`}
-              className={[
-                "relative h-16 w-16 shrink-0 border transition-colors duration-150",
-                i === index ? "border-ink" : "border-sand hover:border-graphite",
-              ].join(" ")}
-            >
-              <Image src={img.url} alt="" fill sizes="64px" className="object-cover" />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Logo controls */}
-      <div className="mt-3 hairline bg-paper-raised px-3 py-2.5">
-        {logo ? (
-          <div className="flex flex-col gap-2 text-sm">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span className="font-medium">Your logo</span>
-              <span className="text-xs text-graphite-ink">
-                Drag it, resize from the corners, or rotate from the top handle.
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <label className="flex min-h-11 items-center gap-2 text-xs text-graphite-ink">
-                Size
-                <input
-                  type="range"
-                  min={Math.round(MIN_SCALE * 100)}
-                  max={Math.round(MAX_SCALE * 100)}
-                  value={sizePercent}
-                  onChange={(e) =>
-                    setLogo((l) => (l ? { ...l, scale: clampScale(Number(e.target.value) / 100) } : l))
-                  }
-                  className="h-11 w-28 accent-[var(--color-fairway)]"
-                  aria-label="Logo size"
-                  aria-valuetext={`${sizePercent} percent of the photo width`}
-                />
-                <span className="tabular w-8 text-ink">{sizePercent}%</span>
-              </label>
-              <label className="flex min-h-11 items-center gap-2 text-xs text-graphite-ink">
-                Rotate
-                <input
-                  type="range"
-                  min={0}
-                  max={359}
-                  value={degrees}
-                  onChange={(e) =>
-                    setLogo((l) => (l ? { ...l, rotation: normalizeRotation(Number(e.target.value)) } : l))
-                  }
-                  className="h-11 w-28 accent-[var(--color-fairway)]"
-                  aria-label="Logo rotation in degrees"
-                  aria-valuetext={`${degrees} degrees`}
-                />
-                <span className="tabular w-8 text-ink">{degrees}°</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setLogo((l) => (l ? { ...l, rotation: 0 } : l))}
-                className="min-h-11 min-w-11 px-2 text-xs underline underline-offset-2 hover:text-fairway"
-                disabled={degrees === 0}
-              >
-                Straighten
-              </button>
-              <label className="flex min-h-11 cursor-pointer items-center text-xs underline underline-offset-2">
-                Replace
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                  className="sr-only"
-                  onChange={(e) => onUpload(e.target.files?.[0])}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={clearLogo}
-                className="min-h-11 text-xs text-graphite-ink underline underline-offset-2 hover:text-flag-ink"
-              >
-                Remove
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <label className="flex min-h-11 cursor-pointer items-center font-medium underline underline-offset-2 hover:text-fairway">
-              See your logo on this
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                className="sr-only"
-                onChange={(e) => onUpload(e.target.files?.[0])}
-              />
-            </label>
-            <span className="text-xs text-graphite-ink">
-              PNG with a transparent background works best. Stays on your device.
-            </span>
-          </div>
-        )}
-        {error && (
-          <p className="mt-1.5 text-xs text-flag-ink" role="alert">
-            {error}
-          </p>
-        )}
-        {logo && (
-          <p className="mt-1.5 text-xs text-graphite-ink">
-            A visual mock-up only — exact position, size and application are confirmed with
-            your quote.
-          </p>
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-graphite-ink">{label}</p>
+        {selectedLogoId && image.url && (
+          <button
+            type="button"
+            onClick={() => setBoard((b) => placeLogoOnView(b, image.url, selectedLogoId))}
+            className="text-xs underline underline-offset-2 hover:text-fairway"
+          >
+            Place on this view
+          </button>
         )}
       </div>
     </div>

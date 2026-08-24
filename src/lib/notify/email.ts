@@ -188,11 +188,12 @@ export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: bool
   const responseHours = process.env.QUOTE_RESPONSE_HOURS ?? "24";
 
   /*
-   * The sales team's copy carries the indicative figures they need to price
-   * the job. The buyer's copy does not: no price appears anywhere on the
-   * public site, and a figure arriving by email would undo that.
+   * The sales team's copy carries retail RRP in AED, labelled as retail —
+   * wholesale stays off anything that might be forwarded. The buyer's copy
+   * still has no figure: the quote is priced separately.
    */
   const showPrices = !isBuyerCopy;
+  const retailTotal = quote.lines.reduce((n, l) => n + (l.rrp ?? 0) * l.quantity, 0);
 
   const rows = quote.lines
     .map(
@@ -206,7 +207,7 @@ export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: bool
       ${
         showPrices
           ? `<td style="padding:6px 10px;border-bottom:1px solid #D8D2C4;font-family:monospace;text-align:right">${
-              l.unit_price === null ? "—" : l.unit_price.toFixed(2)
+              l.rrp === null ? "—" : l.rrp.toFixed(2)
             }</td>`
           : ""
       }
@@ -288,7 +289,7 @@ export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: bool
           <th style="padding:6px 10px">Colour</th>
           <th style="padding:6px 10px">Size</th>
           <th style="padding:6px 10px;text-align:right">Qty</th>
-          ${showPrices ? '<th style="padding:6px 10px;text-align:right">Unit</th>' : ""}
+          ${showPrices ? '<th style="padding:6px 10px;text-align:right">Retail RRP (AED)</th>' : ""}
           <th style="padding:6px 10px">Branding</th>
         </tr>
       </thead>
@@ -300,7 +301,7 @@ export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: bool
           ${
             showPrices
               ? `<td style="padding:8px 10px;font-family:monospace;text-align:right">${money(
-                  quote.indicative_value,
+                  retailTotal,
                 )}</td>`
               : ""
           }
@@ -312,7 +313,7 @@ export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: bool
     <p style="margin:16px 0 0;font-size:12px;color:#5A6165">
       ${
         showPrices
-          ? "Indicative — excludes 5% VAT, branding and delivery. Nothing is reserved and no price is final until confirmed by our team."
+          ? "Retail RRP in AED is not the quote. Wholesale is not on this email. Nothing is reserved and no price is final until confirmed by our team."
           : "We price each request on its own — quantity, branding and delivery together. Nothing is reserved and nothing has been charged."
       }
     </p>

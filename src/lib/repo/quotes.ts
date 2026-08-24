@@ -4,6 +4,7 @@ import { formatReference } from "@/lib/validation/quote";
 import type {
   NotificationLog,
   QuoteLine,
+  QuoteLogo,
   QuoteRequest,
   QuoteRequestWithLines,
   QuoteStatus,
@@ -13,8 +14,12 @@ import type {
    Row mapping
    ---------------------------------------------------------------------- */
 
-type QuoteRow = Omit<QuoteRequest, "has_branding" | "notified_email" | "notified_whatsapp"> & {
+type QuoteRow = Omit<
+  QuoteRequest,
+  "has_branding" | "stock_applied" | "notified_email" | "notified_whatsapp"
+> & {
   has_branding: number;
+  stock_applied: number;
   notified_email: string;
   notified_whatsapp: string;
 };
@@ -32,6 +37,7 @@ function toQuote(r: QuoteRow): QuoteRequest {
   return {
     ...r,
     has_branding: !!r.has_branding,
+    stock_applied: !!r.stock_applied,
     notified_email: parseLog(r.notified_email),
     notified_whatsapp: parseLog(r.notified_whatsapp),
   };
@@ -92,6 +98,8 @@ export interface CreateQuoteInput {
   notes: string | null;
   logo_path: string | null;
   logo_notes: string | null;
+  /** Extra logo files after the first (which is stored on logo_path). */
+  logos?: { storage_path: string; original_name?: string | null }[];
   lines: {
     sku: string;
     article_number: string;
@@ -101,6 +109,7 @@ export interface CreateQuoteInput {
     size: string;
     quantity: number;
     unit_price: number | null;
+    rrp: number | null;
     branding_placements: string[] | null;
     stock_flag: string | null;
   }[];
@@ -126,9 +135,9 @@ export async function createQuoteRequest(input: CreateQuoteInput): Promise<Quote
       `INSERT INTO quote_requests (
          id, reference, company_name, trn, contact_name, contact_role, email, phone,
          delivery_emirate, required_by, notes, total_units, indicative_value,
-         has_branding, logo_path, logo_notes, status, quoted_value, internal_notes,
+         has_branding, logo_path, logo_notes, status, stock_applied, quoted_value, internal_notes,
          notified_email, notified_whatsapp, created_at, updated_at
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       id,
       reference,
       input.company_name,
@@ -146,6 +155,7 @@ export async function createQuoteRequest(input: CreateQuoteInput): Promise<Quote
       input.logo_path,
       input.logo_notes,
       "new",
+      0,
       null,
       null,
       "[]",
@@ -158,8 +168,8 @@ export async function createQuoteRequest(input: CreateQuoteInput): Promise<Quote
       await run(
         `INSERT INTO quote_lines (
            id, quote_request_id, sku, article_number, brand, style_name, colour, size,
-           quantity, unit_price, line_total, branding_placements, stock_flag, sort_order
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           quantity, unit_price, line_total, rrp, branding_placements, stock_flag, sort_order
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         uid(),
         id,
         line.sku,
@@ -171,10 +181,38 @@ export async function createQuoteRequest(input: CreateQuoteInput): Promise<Quote
         line.quantity,
         line.unit_price,
         line.unit_price === null ? null : Math.round(line.unit_price * line.quantity * 100) / 100,
+        line.rrp,
         line.branding_placements ? JSON.stringify(line.branding_placements) : null,
         line.stock_flag,
         i,
       );
+    }
+
+    const extraLogos = input.logos ?? [];
+    for (const [i, logo] of extraLogos.entries()) {
+      await run(
+        `INSERT INTO quote_logos (id, quote_request_id, storage_path, original_name, sort_order)
+         VALUES (?,?,?,?,?)`,
+        uid(),
+        id,
+        logo.storage_path,
+        logo.original_name ?? null,
+        i,
+      );
+    }
+    if (input.logo_path) {
+      const already = extraLogos.some((l) => l.storage_path === input.logo_path);
+      if (!already) {
+        await run(
+          `INSERT INTO quote_logos (id, quote_request_id, storage_path, original_name, sort_order)
+           VALUES (?,?,?,?,?)`,
+          uid(),
+          id,
+          input.logo_path,
+          null,
+          extraLogos.length,
+        );
+      }
     }
   });
 
@@ -200,11 +238,35 @@ export async function getQuoteById(id: string): Promise<QuoteRequestWithLines | 
 }
 
 async function withLines(quote: QuoteRequest): Promise<QuoteRequestWithLines> {
-  const lines = (await all<LineRow>(
-    "SELECT * FROM quote_lines WHERE quote_request_id = ? ORDER BY sort_order ASC",
-    quote.id,
-  )).map(toLine);
-  return { ...quote, lines };
+  const lines = (
+    await all<LineRow>(
+      "SELECT * FROM quote_lines WHERE quote_request_id = ? ORDER BY sort_order ASC",
+      quote.id,
+    )
+  ).map(toLine);
+  const logos = await listQuoteLogos(quote.id, quote.logo_path);
+  return { ...quote, lines, logos };
+}
+
+export async function listQuoteLogos(
+  quoteId: string,
+  fallbackPath: string | null,
+): Promise<QuoteLogo[]> {
+  const rows = await all<QuoteLogo>(
+    `SELECT id, storage_path, original_name, sort_order FROM quote_logos
+      WHERE quote_request_id = ? ORDER BY sort_order ASC`,
+    quoteId,
+  );
+  if (rows.length > 0) return rows;
+  if (!fallbackPath) return [];
+  return [
+    {
+      id: "legacy",
+      storage_path: fallbackPath,
+      original_name: null,
+      sort_order: 0,
+    },
+  ];
 }
 
 export interface QuoteListFilters {
@@ -256,9 +318,166 @@ export async function listQuotes(filters: QuoteListFilters = {}): Promise<QuoteR
    Update
    ---------------------------------------------------------------------- */
 
+/** Statuses that mean the goods are leaving the warehouse. */
+export function statusTakesStock(status: QuoteStatus): boolean {
+  return status === "approved" || status === "won";
+}
+
 export async function updateQuoteStatus(id: string, status: QuoteStatus) {
-  await run("UPDATE quote_requests SET status = ?, updated_at = ? WHERE id = ?", status, now(), id);
+  await transaction(async () => {
+    const row = await get<QuoteRow>("SELECT * FROM quote_requests WHERE id = ?", id);
+    if (!row) return;
+    const quote = await withLines(toQuote(row));
+    const takes = statusTakesStock(status);
+
+    if (takes && !quote.stock_applied) {
+      await decrementQuoteStock(quote);
+      await run(
+        "UPDATE quote_requests SET status = ?, stock_applied = 1, updated_at = ? WHERE id = ?",
+        status,
+        now(),
+        id,
+      );
+    } else if (!takes && quote.stock_applied) {
+      await restockQuote(quote);
+      await run(
+        "UPDATE quote_requests SET status = ?, stock_applied = 0, updated_at = ? WHERE id = ?",
+        status,
+        now(),
+        id,
+      );
+    } else {
+      await run(
+        "UPDATE quote_requests SET status = ?, updated_at = ? WHERE id = ?",
+        status,
+        now(),
+        id,
+      );
+    }
+  });
   await audit("quote.status", id, { status });
+}
+
+async function decrementQuoteStock(quote: QuoteRequestWithLines) {
+  const timestamp = now();
+  for (const line of quote.lines) {
+    const variant = await get<{ id: string; sku: string; size: string; quantity: number }>(
+      "SELECT id, sku, size, quantity FROM variants WHERE sku = ?",
+      line.sku,
+    );
+    if (!variant) continue;
+    const after = Math.max(0, variant.quantity - line.quantity);
+    if (after === variant.quantity) continue;
+    await run("UPDATE variants SET quantity = ?, updated_at = ? WHERE id = ?", after, timestamp, variant.id);
+    await run(
+      `INSERT INTO stock_adjustments (
+         id, sku, article_number, size, quantity_before, quantity_after,
+         delta, reason, note, actor, created_at
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      uid(),
+      variant.sku,
+      line.article_number,
+      variant.size,
+      variant.quantity,
+      after,
+      after - variant.quantity,
+      "sale",
+      `Quote ${quote.reference} approved`,
+      "admin",
+      timestamp,
+    );
+  }
+}
+
+async function restockQuote(quote: QuoteRequestWithLines) {
+  const timestamp = now();
+  for (const line of quote.lines) {
+    const variant = await get<{ id: string; sku: string; size: string; quantity: number }>(
+      "SELECT id, sku, size, quantity FROM variants WHERE sku = ?",
+      line.sku,
+    );
+    if (!variant) continue;
+    const after = variant.quantity + line.quantity;
+    await run("UPDATE variants SET quantity = ?, updated_at = ? WHERE id = ?", after, timestamp, variant.id);
+    await run(
+      `INSERT INTO stock_adjustments (
+         id, sku, article_number, size, quantity_before, quantity_after,
+         delta, reason, note, actor, created_at
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      uid(),
+      variant.sku,
+      line.article_number,
+      variant.size,
+      variant.quantity,
+      after,
+      line.quantity,
+      "return",
+      `Quote ${quote.reference} no longer approved`,
+      "admin",
+      timestamp,
+    );
+  }
+}
+
+export async function replaceQuoteLines(
+  id: string,
+  lines: CreateQuoteInput["lines"],
+  fields: { notes?: string | null; logo_notes?: string | null },
+): Promise<void> {
+  await transaction(async () => {
+    const existing = await get<QuoteRow>("SELECT * FROM quote_requests WHERE id = ?", id);
+    if (!existing) return;
+    const quote = toQuote(existing);
+    if (quote.stock_applied) {
+      throw new Error("This request has already moved stock. Change the status off Approved before editing lines.");
+    }
+
+    await run("DELETE FROM quote_lines WHERE quote_request_id = ?", id);
+
+    const totalUnits = lines.reduce((n, l) => n + l.quantity, 0);
+    const indicativeValue =
+      Math.round(lines.reduce((n, l) => n + (l.unit_price ?? 0) * l.quantity, 0) * 100) / 100;
+    const hasBranding = lines.some((l) => (l.branding_placements?.length ?? 0) > 0);
+
+    for (const [i, line] of lines.entries()) {
+      await run(
+        `INSERT INTO quote_lines (
+           id, quote_request_id, sku, article_number, brand, style_name, colour, size,
+           quantity, unit_price, line_total, rrp, branding_placements, stock_flag, sort_order
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        uid(),
+        id,
+        line.sku,
+        line.article_number,
+        line.brand,
+        line.style_name,
+        line.colour,
+        line.size,
+        line.quantity,
+        line.unit_price,
+        line.unit_price === null ? null : Math.round(line.unit_price * line.quantity * 100) / 100,
+        line.rrp,
+        line.branding_placements ? JSON.stringify(line.branding_placements) : null,
+        line.stock_flag,
+        i,
+      );
+    }
+
+    await run(
+      `UPDATE quote_requests SET
+         notes = ?, logo_notes = ?, total_units = ?, indicative_value = ?,
+         has_branding = ?, updated_at = ?
+       WHERE id = ?`,
+      fields.notes === undefined ? quote.notes : fields.notes,
+      fields.logo_notes === undefined ? quote.logo_notes : fields.logo_notes,
+      totalUnits,
+      indicativeValue,
+      hasBranding ? 1 : 0,
+      now(),
+      id,
+    );
+  });
+  await audit("quote.edit", id, { lines: lines.length });
 }
 
 export async function updateQuoteFields(

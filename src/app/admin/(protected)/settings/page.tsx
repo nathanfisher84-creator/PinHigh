@@ -86,6 +86,7 @@ export default async function AdminSettingsPage() {
 
         <section className="hairline bg-paper-raised px-4 py-4">
           <h2 className="label-caps mb-3">Pre-owned and ex-display stock</h2>
+          <input type="hidden" name="_present_show_non_new_stock" value="1" />
           <label className="flex items-start gap-3 text-sm cursor-pointer">
             <input
               type="checkbox"
@@ -106,6 +107,103 @@ export default async function AdminSettingsPage() {
         </section>
 
         <SubmitButton label="Save settings" />
+      </form>
+
+      <form action={saveSettings} className="mt-8 space-y-8">
+        <section className="hairline bg-paper-raised px-4 py-4">
+          <h2 className="label-caps mb-3">Front flyer</h2>
+          <p className="mb-4 text-xs text-graphite-ink">
+            The home page hero. Leave a field empty to keep the default.
+          </p>
+          <div className="grid gap-4">
+            <Field
+              label="Kicker (small line above the headline)"
+              name="home_kicker"
+              defaultValue={settings.home_kicker}
+            />
+            <div>
+              <label htmlFor="home_headline" className="label-caps block mb-1">
+                Headline
+              </label>
+              <textarea
+                id="home_headline"
+                name="home_headline"
+                rows={2}
+                defaultValue={settings.home_headline}
+                className="w-full hairline bg-paper px-3 py-2 text-sm focus:outline-none focus:border-fairway"
+              />
+            </div>
+            <div>
+              <label htmlFor="home_body" className="label-caps block mb-1">
+                Body
+              </label>
+              <textarea
+                id="home_body"
+                name="home_body"
+                rows={3}
+                defaultValue={settings.home_body}
+                className="w-full hairline bg-paper px-3 py-2 text-sm focus:outline-none focus:border-fairway"
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="Button label"
+                name="home_cta_label"
+                defaultValue={settings.home_cta_label}
+              />
+              <Field
+                label="Button link"
+                name="home_cta_href"
+                defaultValue={settings.home_cta_href}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="hairline bg-paper-raised px-4 py-4">
+          <h2 className="label-caps mb-3">New-product carousel</h2>
+          <input type="hidden" name="_present_carousel_enabled" value="1" />
+          <label className="flex items-start gap-3 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              name="carousel_enabled"
+              defaultChecked={settings.carousel_enabled === "true"}
+              className="mt-1 h-4 w-4 accent-[var(--color-fairway)]"
+            />
+            <span>
+              <strong>Show the carousel on the home flyer</strong>
+              <span className="block text-graphite-ink">
+                Off until you turn it on. Use it for a theme of new product.
+              </span>
+            </span>
+          </label>
+          <div className="mt-4 grid gap-4">
+            <Field
+              label="Carousel title"
+              name="carousel_title"
+              defaultValue={settings.carousel_title}
+            />
+            <div>
+              <label htmlFor="carousel_articles" className="label-caps block mb-1">
+                Article numbers
+              </label>
+              <textarea
+                id="carousel_articles"
+                name="carousel_articles"
+                rows={3}
+                defaultValue={settings.carousel_articles}
+                placeholder="HZ6893, HZ6891, IU4435"
+                className="w-full hairline bg-paper px-3 py-2 text-sm tabular focus:outline-none focus:border-fairway"
+              />
+              <p className="mt-1 text-xs text-graphite-ink">
+                Comma-separated article numbers from the catalogue. Unknown
+                numbers are skipped.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <SubmitButton label="Save flyer" />
       </form>
 
       <section className="mt-12 hairline bg-paper-raised px-4 py-4">

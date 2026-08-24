@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import {
   getColourwayRuns,
   getProductByArticle,
-  getStockAsAt,
   listCatalogue,
 } from "@/lib/repo/catalogue";
 import { ColourwayPanel } from "@/components/order/ColourwayPanel";
@@ -15,8 +14,9 @@ import {
   GENDER_LABELS,
   CONDITION_LABELS,
 } from "@/lib/domain/types";
-import { PRICE_NOTE, PRICE_ON_REQUEST, stockAsAt } from "@/lib/format";
+import { PRICE_NOTE, PRICE_ON_REQUEST, RETAIL_RRP_LABEL, RETAIL_RRP_NOTE, money } from "@/lib/format";
 import { isRelatedCatalogueCard } from "@/lib/domain/buyer-predicates";
+import { hasOfficialCopy, officialCopy, splitCopyLines } from "@/lib/domain/adidas-copy";
 
 type Params = Promise<{ article_number: string }>;
 
@@ -40,8 +40,18 @@ export default async function ProductPage({ params }: { params: Params }) {
   if (!product) notFound();
 
   const runs = (await getColourwayRuns(product));
-  const stockDate = await getStockAsAt();
   const totalUnits = product.variants.reduce((n, v) => n + v.quantity, 0);
+  const official = officialCopy(product.article_number);
+  const material = official.material ?? product.fabric;
+  const features = official.features.length ? official.features : splitCopyLines(product.features);
+  const benefits = official.benefits.length ? official.benefits : splitCopyLines(product.benefits);
+  const description = official.description ?? product.description;
+  const hasDetails =
+    Boolean(material) ||
+    features.length > 0 ||
+    benefits.length > 0 ||
+    Boolean(description) ||
+    hasOfficialCopy(official);
 
   // Related: same category and brand, excluding this style group.
   const related = (await listCatalogue({ category: [product.category], brand: [product.brand] }))
@@ -118,9 +128,13 @@ export default async function ProductPage({ params }: { params: Params }) {
       <div className="mt-10 grid gap-8 lg:grid-cols-2">
         <div>
           <div className="hairline bg-paper-raised px-4 py-4">
-            <p className="text-lg font-medium">{PRICE_ON_REQUEST}</p>
+            <p className="label-caps">{RETAIL_RRP_LABEL}</p>
+            <p className="mt-1 text-lg font-medium tabular">
+              {product.rrp != null ? money(product.rrp) : "On request"}
+            </p>
+            <p className="mt-1 text-sm text-graphite-ink">{RETAIL_RRP_NOTE}</p>
+            <p className="mt-4 text-lg font-medium">{PRICE_ON_REQUEST}</p>
             <p className="mt-1 text-sm text-graphite-ink">{PRICE_NOTE}</p>
-            <p className="mt-3 tabular text-xs text-graphite-ink">{(await stockAsAt(stockDate))}</p>
           </div>
 
           {totalUnits === 0 && (
@@ -157,10 +171,10 @@ export default async function ProductPage({ params }: { params: Params }) {
               {CONDITION_LABELS[product.condition]}
             </dd>
           </div>
-          {product.fabric && (
+          {material && (
             <div className="flex justify-between gap-4 border-b border-sand py-2">
-              <dt className="text-graphite-ink">Fabric</dt>
-              <dd className="text-right">{product.fabric}</dd>
+              <dt className="text-graphite-ink">Material</dt>
+              <dd className="text-right">{material}</dd>
             </div>
           )}
           {product.season && (
@@ -176,10 +190,39 @@ export default async function ProductPage({ params }: { params: Params }) {
         </dl>
       </div>
 
-      {product.description && (
+      {hasDetails ? (
+        <div className="mt-8 max-w-2xl space-y-6">
+          {description && (
+            <div>
+              <h2 className="label-caps mb-2">Description</h2>
+              <p className="text-sm leading-relaxed">{description}</p>
+            </div>
+          )}
+          {features.length > 0 && (
+            <div>
+              <h2 className="label-caps mb-2">Features</h2>
+              <ul className="list-disc space-y-1 pl-5 text-sm">
+                {features.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {benefits.length > 0 && (
+            <div>
+              <h2 className="label-caps mb-2">Benefits</h2>
+              <ul className="list-disc space-y-1 pl-5 text-sm">
+                {benefits.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : (
         <div className="mt-8 max-w-2xl">
-          <h2 className="label-caps mb-2">Description</h2>
-          <p className="text-sm leading-relaxed">{product.description}</p>
+          <h2 className="label-caps mb-2">Product information</h2>
+          <p className="text-sm text-graphite-ink">Details on request.</p>
         </div>
       )}
 

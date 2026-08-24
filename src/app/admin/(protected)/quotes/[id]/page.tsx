@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getQuoteById } from "@/lib/repo/quotes";
 import { QuoteAdminControls } from "@/components/admin/QuoteAdminControls";
+import { QuoteEditForm } from "@/components/admin/QuoteEditForm";
 import { NotificationStatus } from "@/components/admin/NotificationStatus";
 import { StatusPill } from "@/components/admin/StatusPill";
-import { amount, formatDate, formatDateTime, money, units } from "@/lib/format";
+import { amount, formatDate, formatDateTime, money, RETAIL_RRP_LABEL, units } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +85,6 @@ export default async function AdminQuoteDetail({ params }: { params: Params }) {
             {[...groups.entries()].map(([article, lines]) => {
               const lead = lines[0];
               const groupUnits = lines.reduce((n, l) => n + l.quantity, 0);
-              const groupValue = lines.reduce((n, l) => n + (l.line_total ?? 0), 0);
               return (
                 <section key={article} className="hairline bg-paper-raised">
                   <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-sand px-4 py-3">
@@ -104,7 +104,7 @@ export default async function AdminQuoteDetail({ params }: { params: Params }) {
                       </p>
                     </div>
                     <p className="tabular text-sm">
-                      {units(groupUnits)} · {money(groupValue)}
+                      {units(groupUnits)} · Retail RRP {money(lines.reduce((n, l) => n + (l.rrp ?? 0) * l.quantity, 0))}
                     </p>
                   </header>
 
@@ -139,7 +139,7 @@ export default async function AdminQuoteDetail({ params }: { params: Params }) {
 
                   <footer className="border-t border-sand px-4 py-2 flex flex-wrap justify-between gap-2 text-xs text-graphite-ink">
                     <span className="tabular">
-                      Indicative {amount(lead.unit_price)} per unit, ex-VAT
+                      {RETAIL_RRP_LABEL} {amount(lead.rrp)} per unit
                     </span>
                     {lead.branding_placements?.length ? (
                       <span className="text-ink">
@@ -168,7 +168,21 @@ export default async function AdminQuoteDetail({ params }: { params: Params }) {
             <section className="mt-8">
               <h2 className="label-caps mb-2">Branding</h2>
               <div className="hairline bg-paper-raised px-4 py-4">
-                {quote.logo_path ? (
+                {quote.logos.length > 0 ? (
+                  <ul className="flex flex-wrap gap-2">
+                    {quote.logos.map((logo, i) => (
+                      <li key={logo.id}>
+                        <a
+                          href={`/admin/artwork/${encodeURIComponent(logo.storage_path)}`}
+                          className="inline-block bg-fairway px-4 py-2 text-sm text-paper hover:bg-ink transition-colors duration-150"
+                        >
+                          Download logo {quote.logos.length > 1 ? i + 1 : ""}
+                          {logo.original_name ? ` (${logo.original_name})` : ""}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : quote.logo_path ? (
                   <a
                     href={`/admin/artwork/${encodeURIComponent(quote.logo_path)}`}
                     className="inline-block bg-fairway px-4 py-2 text-sm text-paper hover:bg-ink transition-colors duration-150"
@@ -249,12 +263,20 @@ export default async function AdminQuoteDetail({ params }: { params: Params }) {
             <dl className="text-sm space-y-1.5">
               <Row label="Units" value={String(quote.total_units)} mono />
               <Row label="Lines" value={String(quote.lines.length)} mono />
-              <Row label="Indicative" value={money(quote.indicative_value)} mono />
+              <Row
+                label="Retail RRP"
+                value={money(
+                  quote.lines.reduce((n, l) => n + (l.rrp ?? 0) * l.quantity, 0),
+                )}
+                mono
+              />
             </dl>
             <p className="mt-2 text-xs text-graphite-ink">
-              Indicative, ex-VAT, before branding and delivery.
+              Retail RRP in AED is not the quote. Wholesale stays in Products.
             </p>
           </section>
+
+          <QuoteEditForm quote={quote} />
 
           <QuoteAdminControls
             id={quote.id}
@@ -263,6 +285,12 @@ export default async function AdminQuoteDetail({ params }: { params: Params }) {
             internalNotes={quote.internal_notes}
           />
 
+          <a
+            href={`/admin/quotes/${quote.id}/excel`}
+            className="block text-center bg-fairway px-3 py-2 text-sm text-paper hover:bg-ink transition-colors duration-150"
+          >
+            Download Excel (.xlsx)
+          </a>
           <a
             href={`/admin/quotes/${quote.id}/export`}
             className="block text-center hairline px-3 py-2 text-sm hover:border-fairway transition-colors duration-150"

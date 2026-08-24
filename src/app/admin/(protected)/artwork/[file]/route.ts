@@ -40,7 +40,13 @@ export async function GET(
 
   // Only serve a file some quote request actually points at.
   const owner = await get<{ reference: string }>(
-    "SELECT reference FROM quote_requests WHERE logo_path = ?",
+    `SELECT reference FROM quote_requests WHERE logo_path = ?
+     UNION
+     SELECT q.reference FROM quote_logos l
+       JOIN quote_requests q ON q.id = l.quote_request_id
+      WHERE l.storage_path = ?
+     LIMIT 1`,
+    name,
     name,
   );
   if (!owner) return new NextResponse("Not found.", { status: 404 });

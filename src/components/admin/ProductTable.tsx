@@ -249,15 +249,21 @@ export function ProductTable({
 
                         <Input label="Season" name="season" defaultValue={p.season ?? ""} />
 
-                        <Input label="Fabric" name="fabric" defaultValue={p.fabric ?? ""} className="lg:col-span-2" />
+                        <Input label="Material / fabric" name="fabric" defaultValue={p.fabric ?? ""} className="lg:col-span-2" />
                         <Input
                           label="Corporate price (AED)"
                           name="price_wholesale"
                           defaultValue={p.price_wholesale ?? ""}
                           numeric
-                          help="What the customer sees. Your margin call."
+                          help="Admin-only wholesale. Never shown to buyers."
                         />
-                        <Input label="Retail price (AED)" name="rrp" defaultValue={p.rrp ?? ""} numeric />
+                        <Input
+                          label="Retail RRP (AED)"
+                          name="rrp"
+                          defaultValue={p.rrp ?? ""}
+                          numeric
+                          help="Shown on the product page and on invoices / implementation files. Not the quote."
+                        />
 
                         {/* Read-only. Cost comes from the adidas invoice and is
                             never rendered on the public site. */}
@@ -294,6 +300,31 @@ export function ProductTable({
                             />
                             Discontinued
                           </label>
+                        </div>
+
+                        <div className="lg:col-span-2">
+                          <label htmlFor={`feat-${p.id}`} className="label-caps block mb-1">
+                            Features (one per line)
+                          </label>
+                          <textarea
+                            id={`feat-${p.id}`}
+                            name="features"
+                            rows={3}
+                            defaultValue={p.features ?? ""}
+                            className="w-full hairline bg-paper-raised px-3 py-2 text-sm focus:outline-none focus:border-fairway"
+                          />
+                        </div>
+                        <div className="lg:col-span-2">
+                          <label htmlFor={`ben-${p.id}`} className="label-caps block mb-1">
+                            Benefits (one per line)
+                          </label>
+                          <textarea
+                            id={`ben-${p.id}`}
+                            name="benefits"
+                            rows={3}
+                            defaultValue={p.benefits ?? ""}
+                            className="w-full hairline bg-paper-raised px-3 py-2 text-sm focus:outline-none focus:border-fairway"
+                          />
                         </div>
 
                         <div className="lg:col-span-4">
