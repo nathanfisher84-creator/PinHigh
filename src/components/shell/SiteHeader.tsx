@@ -61,7 +61,7 @@ export function SiteHeader({ categories, genders, announcement }: Props) {
           the B2B equivalents are supply facts. */}
       <div className="no-print on-fairway">
         <div className="mx-auto flex max-w-[110rem] items-center justify-between gap-4 px-5 py-1.5 text-[11px] font-medium tracking-wide sm:px-8 lg:px-12">
-          <p className="uppercase">Corporate golf supply — Dubai</p>
+          <p className="uppercase">Corporate golf supply</p>
           <p className="hidden text-on-fairway-dim sm:block">
             AN ADIDAS OFFICIAL B2B PARTNER
           </p>
@@ -77,9 +77,9 @@ export function SiteHeader({ categories, genders, announcement }: Props) {
 
       <header className="no-print sticky top-0 z-30 bg-paper/95 backdrop-blur-sm">
         <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12">
-          <div className="flex h-24 items-center justify-between gap-8 border-b border-sand">
+          <div className="flex min-h-[6.75rem] items-center justify-between gap-8 border-b border-sand py-3">
             <Link href="/" aria-label="Pin High UAE, home" className="shrink-0">
-              <Logo />
+              <Logo size="site" />
             </Link>
 
             <nav

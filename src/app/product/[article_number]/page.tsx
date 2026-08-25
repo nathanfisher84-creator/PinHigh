@@ -183,10 +183,6 @@ export default async function ProductPage({ params }: { params: Params }) {
               <dd className="tabular">{product.season}</dd>
             </div>
           )}
-          <div className="flex justify-between gap-4 border-b border-sand py-2">
-            <dt className="text-graphite-ink">Total in stock</dt>
-            <dd className="tabular">{totalUnits}</dd>
-          </div>
         </dl>
       </div>
 

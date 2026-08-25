@@ -557,12 +557,10 @@ export async function getVariantsBySku(skus: string[]): Promise<Map<string, Live
 }
 
 /**
- * Headline figures for the landing page.
+ * Warehouse headline figures — admin and reports only.
  *
- * A distributor's stock position is the most persuasive thing it has, so these
- * are rendered at full size rather than tucked into a badge. Counts respect the
- * same visibility rules as the catalogue, so the number on the home page and
- * the number of things you can actually order never disagree.
+ * Buyers never see a catalogue-wide unit count. The public size grid still
+ * shows what is available on each article.
  */
 export async function getCatalogueTotals(): Promise<{
   units: number;
