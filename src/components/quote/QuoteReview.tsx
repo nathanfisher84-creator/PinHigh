@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { readLogoBoard } from "@/lib/logo-preview";
 import {
   groupByArticle,
   removeArticle,
@@ -41,6 +42,18 @@ export function QuoteReview() {
   const [logo, setLogo] = useState<File | null>(null);
   const [extraLogos, setExtraLogos] = useState<File[]>([]);
   const [logoWarning, setLogoWarning] = useState<string | null>(null);
+  /** Logos already placed in the on-product try-on — offered for attachment. */
+  const [previewLogos, setPreviewLogos] = useState<{ id: string; dataUrl: string }[]>([]);
+  const [attachPreviewLogos, setAttachPreviewLogos] = useState(true);
+
+  useEffect(() => {
+    try {
+      const board = readLogoBoard(window.localStorage);
+      setPreviewLogos(board.logos.map((l) => ({ id: l.id, dataUrl: l.dataUrl })));
+    } catch {
+      /* no preview logos is the normal case */
+    }
+  }, []);
   const [trn, setTrn] = useState("");
 
   const groups = useMemo(() => groupByArticle(cart), [cart]);
@@ -118,6 +131,19 @@ export function QuoteReview() {
     );
     if (logo) formData.set("logo", logo);
     for (const extra of extraLogos) formData.append("logos", extra);
+    if (attachPreviewLogos && previewLogos.length) {
+      for (const [i, pl] of previewLogos.entries()) {
+        try {
+          const blob = await (await fetch(pl.dataUrl)).blob();
+          formData.append(
+            "logos",
+            new File([blob], `preview-logo-${i + 1}.png`, { type: blob.type || "image/png" }),
+          );
+        } catch {
+          /* a preview logo that fails to read is silently skipped */
+        }
+      }
+    }
 
     const result = await submitQuoteRequest(formData);
     setSubmitting(false);
@@ -336,15 +362,40 @@ export function QuoteReview() {
           })}
         </div>
 
-        {/* Logo upload — once, reused across every branded line (§8). */}
-        {cartTotals.hasBranding && (
-          <section className="mt-8 hairline bg-paper-raised px-4 py-4">
-            <h2 className="label-caps mb-2">Your artwork</h2>
+        {/* Logo upload — always offered, not gated behind a per-line tick.
+            A buyer sending kit "with our logo on it" should never have to
+            hunt for where the logo goes. */}
+        <section className="mt-8 hairline bg-paper-raised px-4 py-4">
+            <h2 className="label-caps mb-2">Your logo / artwork</h2>
             <p className="text-sm text-graphite-ink mb-3">
-              Upload once and we&apos;ll use it on every item you&apos;ve branded.
-              Vector files reproduce best. Your artwork is stored privately and
-              only seen by our team.
+              {cartTotals.hasBranding
+                ? "Upload once and we'll use it on every item you've branded. Vector files reproduce best. Your artwork is stored privately and only seen by our team."
+                : "Want your logo on any of this? Attach it here and tell us where — we'll price the branding with the quote. Optional; stored privately and only seen by our team."}
             </p>
+            {previewLogos.length > 0 && (
+              <label className="mb-3 flex items-start gap-2.5 border border-fairway-wash bg-fairway-wash px-3 py-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={attachPreviewLogos}
+                  onChange={(e) => setAttachPreviewLogos(e.target.checked)}
+                  className="mt-0.5 accent-[var(--color-fairway)]"
+                />
+                <span>
+                  <span className="font-medium">
+                    Attach the {previewLogos.length === 1 ? "logo" : `${previewLogos.length} logos`} from your product preview
+                  </span>
+                  <span className="mt-1 flex gap-2">
+                    {previewLogos.slice(0, 6).map((pl) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img key={pl.id} src={pl.dataUrl} alt="" className="h-8 w-8 border border-sand bg-paper object-contain" />
+                    ))}
+                  </span>
+                  <span className="mt-1 block text-xs text-graphite-ink">
+                    Preview quality — attach the original files below too if you have them.
+                  </span>
+                </span>
+              </label>
+            )}
             <input
               type="file"
               name="logo_input"
@@ -387,7 +438,6 @@ export function QuoteReview() {
               className="w-full hairline bg-paper px-3 py-2 text-sm focus:outline-none focus:border-fairway"
             />
           </section>
-        )}
 
         {/* Contact details */}
         <section id="quote-details" className="mt-10">
