@@ -73,7 +73,7 @@ export default async function HomePage() {
   const headline = (await getSetting("home_headline")) || "The whole golf day.\nOne warehouse.";
   const body =
     (await getSetting("home_body")) ||
-    "Tournaments, client gifting, staff kit — specified by the size run, embroidered with your logo, quoted within a day.";
+    "Tournaments, client gifting, staff kit — specified by the size run, embroidered with your logo, priced as one clear quote.";
   const ctaLabel = (await getSetting("home_cta_label")) || "Browse the catalogue";
   const ctaHref = (await getSetting("home_cta_href")) || "/catalogue";
   const heroImagesRaw = (await getSetting("hero_images")) || "[]";
@@ -176,7 +176,7 @@ export default async function HomePage() {
             },
             {
               icon: ICONS.clock,
-              title: "Quotes within a day",
+              title: "One clear quote",
               sub: "Quantity, branding and delivery together",
             },
             {
