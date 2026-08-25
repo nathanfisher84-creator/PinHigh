@@ -68,7 +68,7 @@ export default async function HomePage() {
   const bestStocked = cards.filter((c) => c.total_quantity > 0).slice(0, 6);
   const liveCategories = CATEGORY_ORDER.filter((c) => (counts.get(c) ?? 0) > 0).slice(0, 6);
 
-  const kicker = (await getSetting("home_kicker")) || "AN ADIDAS OFFICIAL B2B PARTNER";
+  const kicker = (await getSetting("home_kicker")) || "Genuine adidas golf, supplied from Dubai";
   const headline = (await getSetting("home_headline")) || "The whole golf day.\nOne warehouse.";
   const body =
     (await getSetting("home_body")) ||
@@ -347,7 +347,7 @@ export default async function HomePage() {
       <section className="on-fairway">
         <ul className="mx-auto grid max-w-[110rem] grid-cols-2 gap-x-6 gap-y-4 px-5 py-6 sm:px-8 lg:grid-cols-4 lg:px-12">
           {[
-            "AN ADIDAS OFFICIAL B2B PARTNER",
+            "Genuine adidas stock",
             "Full size runs XS–4XL",
             "Embroidery in Dubai",
             "Quoted in AED, excl. VAT",

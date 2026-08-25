@@ -70,6 +70,13 @@ async function openPg(url: string): Promise<Driver> {
     ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false },
   });
 
+  // An idle client losing its connection (Supabase's pooler recycles them)
+  // must be an event we log, not a process crash — an unhandled pool error
+  // took a production request down with exit 128.
+  pool.on("error", (err) => {
+    console.error("[pinhigh] idle database connection error (recovered):", err.message);
+  });
+
   const als = new AsyncLocalStorage<import("pg").PoolClient>();
 
   return {
@@ -360,7 +367,7 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   contact_whatsapp: "",
   show_non_new_stock: "false",
   quote_response_hours: "24",
-  home_kicker: "AN ADIDAS OFFICIAL B2B PARTNER",
+  home_kicker: "Genuine adidas golf, supplied from Dubai",
   home_headline: "The whole golf day.\nOne warehouse.",
   home_body:
     "Tournaments, client gifting, staff kit — specified by the size run, embroidered with your logo, quoted within a day.",

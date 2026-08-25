@@ -63,7 +63,7 @@ export function SiteHeader({ categories, genders, announcement }: Props) {
         <div className="mx-auto flex max-w-[110rem] items-center justify-between gap-4 px-5 py-1.5 text-[11px] font-medium tracking-wide sm:px-8 lg:px-12">
           <p className="uppercase">Corporate golf supply</p>
           <p className="hidden text-on-fairway-dim sm:block">
-            AN ADIDAS OFFICIAL B2B PARTNER
+            Tournaments · client gifting · staff kit
           </p>
           <Link href="/contact" className="uppercase hover:text-fairway-bright">
             Help &amp; contact
