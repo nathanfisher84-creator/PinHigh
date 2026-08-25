@@ -8,6 +8,7 @@ import {
 import { ProductCard } from "@/components/catalogue/ProductCard";
 import { CATEGORY_LABELS, type Category } from "@/lib/domain/types";
 import { getSetting } from "@/lib/db";
+import { HeroBackground } from "@/components/home/HeroBackground";
 
 /**
  * Landing page — premium retail anatomy, B2B content.
@@ -75,6 +76,18 @@ export default async function HomePage() {
     "Tournaments, client gifting, staff kit — specified by the size run, embroidered with your logo, quoted within a day.";
   const ctaLabel = (await getSetting("home_cta_label")) || "Browse the catalogue";
   const ctaHref = (await getSetting("home_cta_href")) || "/catalogue";
+  const heroImagesRaw = (await getSetting("hero_images")) || "[]";
+  const heroImages = (() => {
+    try {
+      const parsed = JSON.parse(heroImagesRaw);
+      return Array.isArray(parsed)
+        ? parsed.filter((u): u is string => typeof u === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  })();
+  const heroRotate = (await getSetting("hero_rotate")) === "true";
   const carouselOn = (await getSetting("carousel_enabled")) === "true";
   const carouselTitle = (await getSetting("carousel_title")) || "New in";
   const carouselArticles = (await getSetting("carousel_articles"))
@@ -104,14 +117,7 @@ export default async function HomePage() {
     <>
       {/* ── Hero: full-bleed photography, one accent word. ───────────────── */}
       <section className="relative isolate min-h-[520px] lg:min-h-[620px] flex items-center overflow-hidden bg-fairway-deep text-on-fairway">
-        <Image
-          src="/hero/course.webp"
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover"
-        />
+        <HeroBackground images={heroImages} rotate={heroRotate} />
         <div
           aria-hidden
           className="absolute inset-0 bg-gradient-to-r from-fairway-deep/85 via-fairway-deep/45 to-transparent"

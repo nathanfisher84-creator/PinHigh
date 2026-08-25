@@ -2,6 +2,7 @@ import { getSetting, getSettings } from "@/lib/db";
 import { saveSettings } from "@/app/admin/actions";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { GmailSettings, PasswordSettings } from "@/components/admin/OwnerSettings";
+import { HeroImagesCard } from "@/components/admin/HeroImagesCard";
 import { emailTransportStatus } from "@/lib/notify/email";
 import { canStoreSecrets } from "@/lib/secrets";
 
@@ -12,6 +13,16 @@ export default async function AdminSettingsPage() {
   const settings = await getSettings();
   const email = await emailTransportStatus();
   const hasOwnPassword = Boolean(await getSetting("admin_password_hash"));
+  const heroImages = (() => {
+    try {
+      const parsed = JSON.parse(settings.hero_images || "[]");
+      return Array.isArray(parsed)
+        ? parsed.filter((u): u is string => typeof u === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  })();
 
   return (
     <div className="max-w-2xl">
@@ -24,6 +35,7 @@ export default async function AdminSettingsPage() {
           canStore={canStoreSecrets()}
         />
         <PasswordSettings hasOwnPassword={hasOwnPassword} />
+        <HeroImagesCard images={heroImages} rotate={settings.hero_rotate === "true"} />
       </div>
 
       <form action={saveSettings} className="mt-8 space-y-8">

@@ -372,6 +372,11 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   home_body:
     "Tournaments, client gifting, staff kit — specified by the size run, embroidered with your logo, quoted within a day.",
   home_cta_label: "Browse the catalogue",
+  // JSON array of image URLs the owner uploaded for the home hero.
+  // Empty means the bundled course photograph.
+  hero_images: "",
+  // "true" + 2 or more images = slow crossfade marketing carousel.
+  hero_rotate: "false",
   home_cta_href: "/catalogue",
   carousel_enabled: "false",
   carousel_title: "New in",

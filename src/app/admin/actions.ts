@@ -602,3 +602,103 @@ export async function changeAdminPassword(
     message: "Password changed. Existing sign-ins stay valid until they expire.",
   };
 }
+
+/* -------------------------------------------------------------------------
+   Hero background (owner-managed home "flyer" imagery)
+   ---------------------------------------------------------------------- */
+
+const MAX_HERO_IMAGES = 6;
+const MAX_HERO_INPUT_BYTES = 8 * 1024 * 1024;
+
+async function readHeroImages(): Promise<string[]> {
+  try {
+    const raw = await getSetting("hero_images");
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(parsed) ? parsed.filter((u): u is string => typeof u === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Upload one or more hero background images. Processed like product
+ * photography (webp, EXIF stripped, sized for a full-bleed hero) and stored
+ * through the same seam, so they persist wherever product images do.
+ */
+export async function uploadHeroImages(
+  formData: FormData,
+): Promise<{ ok: boolean; message: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Not signed in." };
+
+  const files = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return { ok: false, message: "Choose at least one image." };
+
+  const existing = await readHeroImages();
+  if (existing.length + files.length > MAX_HERO_IMAGES) {
+    return {
+      ok: false,
+      message: `Up to ${MAX_HERO_IMAGES} images — remove one before adding more.`,
+    };
+  }
+
+  const { default: sharp } = await import("sharp");
+  const { putImage, imageUrl } = await import("@/lib/images/storage");
+
+  const added: string[] = [];
+  for (const file of files) {
+    if (file.size > MAX_HERO_INPUT_BYTES) {
+      return { ok: false, message: `${file.name} is over 8 MB — export it smaller.` };
+    }
+    try {
+      const processed = await sharp(Buffer.from(await file.arrayBuffer()))
+        .rotate()
+        .resize({ width: 1920, withoutEnlargement: true })
+        .webp({ quality: 78 })
+        .toBuffer();
+      const key = `site/hero-${uid()}.webp`;
+      await putImage(key, processed);
+      added.push(imageUrl(key));
+    } catch {
+      return { ok: false, message: `${file.name} couldn't be read as an image.` };
+    }
+  }
+
+  await setSetting("hero_images", JSON.stringify([...existing, ...added]));
+  await audit("settings.hero", "images-added", { count: added.length }, session.email);
+  revalidatePath("/");
+  revalidatePath("/admin/settings");
+  return {
+    ok: true,
+    message: `${added.length} image${added.length === 1 ? "" : "s"} added to the hero.`,
+  };
+}
+
+export async function removeHeroImage(url: string): Promise<{ ok: boolean; message: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Not signed in." };
+
+  const existing = await readHeroImages();
+  const next = existing.filter((u) => u !== url);
+  await setSetting("hero_images", next.length ? JSON.stringify(next) : "");
+  await audit("settings.hero", "image-removed", undefined, session.email);
+  revalidatePath("/");
+  revalidatePath("/admin/settings");
+  return {
+    ok: true,
+    message: next.length
+      ? "Removed."
+      : "Removed — the hero is back on the standard course photograph.",
+  };
+}
+
+export async function setHeroRotation(on: boolean): Promise<{ ok: boolean; message: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Not signed in." };
+
+  await setSetting("hero_rotate", on ? "true" : "false");
+  await audit("settings.hero", on ? "rotation-on" : "rotation-off", undefined, session.email);
+  revalidatePath("/");
+  revalidatePath("/admin/settings");
+  return { ok: true, message: on ? "The hero now rotates through your images." : "Rotation off — the first image stays." };
+}
