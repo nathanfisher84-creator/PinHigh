@@ -21,7 +21,9 @@ const GREEN = "#5CB947";
 const RED = "#D93A2B";
 
 const SIZES = {
-  site: { mark: 72, wordmark: 44, gap: "gap-4" },
+  site: { mark: 92, wordmark: 56, gap: "gap-5" },
+  medium: { mark: 56, wordmark: 34, gap: "gap-3" },
+  mobile: { mark: 52, wordmark: 32, gap: "gap-2.5" },
   compact: { mark: 32, wordmark: 20, gap: "gap-2" },
 } as const;
 

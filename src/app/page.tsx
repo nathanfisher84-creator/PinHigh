@@ -117,8 +117,10 @@ export default async function HomePage() {
           className="absolute inset-0 bg-gradient-to-r from-fairway-deep/85 via-fairway-deep/45 to-transparent"
         />
         <div className="relative mx-auto w-full max-w-[110rem] px-5 py-20 sm:px-8 lg:px-12">
-          <p className="label-caps text-on-fairway-dim">
+          <p className="inline-flex items-center gap-3 border-2 border-fairway-bright/80 bg-fairway-deep/60 px-5 py-2.5 text-xs font-bold uppercase tracking-[0.2em] text-on-fairway backdrop-blur-sm sm:text-sm">
+            <span aria-hidden className="h-2 w-2 bg-fairway-bright" />
             {kicker}
+            <span aria-hidden className="h-2 w-2 bg-fairway-bright" />
           </p>
           <h1 className="mt-5 display max-w-[13ch] text-4xl uppercase sm:text-5xl lg:text-6xl">
             {headline.split("\n").map((line, i, arr) => (

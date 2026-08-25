@@ -77,9 +77,21 @@ export function SiteHeader({ categories, genders, announcement }: Props) {
 
       <header className="no-print sticky top-0 z-30 bg-paper/95 backdrop-blur-sm">
         <div className="mx-auto max-w-[110rem] px-5 sm:px-8 lg:px-12">
-          <div className="flex min-h-[6.75rem] items-center justify-between gap-8 border-b border-sand py-3">
+          <div className="flex min-h-[8.5rem] items-center justify-between gap-8 border-b border-sand py-4">
             <Link href="/" aria-label="Pin High UAE, home" className="shrink-0">
-              <Logo size="site" />
+              <span className="flex flex-col items-start gap-1.5">
+                <span className="hidden sm:block">
+                  <Logo size="site" />
+                </span>
+                <span className="sm:hidden">
+                  <Logo size="mobile" />
+                </span>
+                {/* The credential, worn on every page — not buried in a hero. */}
+                <span className="inline-flex items-center gap-2 border border-fairway px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-fairway sm:text-[11px]">
+                  <span aria-hidden className="h-1.5 w-1.5 bg-fairway" />
+                  Official adidas B2B Partner
+                </span>
+              </span>
             </Link>
 
             <nav
