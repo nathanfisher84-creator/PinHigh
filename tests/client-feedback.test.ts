@@ -105,7 +105,10 @@ describe("header does not name Dubai as the service area", () => {
     );
     assert.equal(/Dubai/.test(header), false);
     assert.ok(header.includes("Corporate golf supply"));
-    assert.ok(header.includes("AN ADIDAS OFFICIAL B2B PARTNER"));
+    // The credential appears exactly once — as the badge under the lockup.
+    // Owner feedback: repeating it reads as protesting too much.
+    const credentialCount = (header.match(/adidas B2B Partner/gi) ?? []).length;
+    assert.equal(credentialCount, 1);
   });
 });
 
