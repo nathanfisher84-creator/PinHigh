@@ -214,6 +214,39 @@ async function migrate(driver: Driver): Promise<void> {
     `);
   };
 
+  // Lock the schema against Supabase's auto-generated Data API. This app
+  // never uses PostgREST: every query runs server-side through this driver
+  // as the table owner, and owners bypass row-level security - so enabling
+  // RLS with no policies plus revoking the API roles' grants closes the
+  // "anyone with the project URL can read the tables" hole (Security
+  // Advisor: rls_disabled_in_public) without changing app behaviour. The
+  // loop covers every table in public, present and future; the role checks
+  // keep the block a no-op on plain Postgres, where anon/authenticated
+  // don't exist.
+  const hardenRls = () =>
+    driver.exec(`
+      DO $rls$
+      DECLARE t record;
+      BEGIN
+        FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+          EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.tablename);
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+            EXECUTE format('REVOKE ALL ON TABLE public.%I FROM anon', t.tablename);
+          END IF;
+          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+            EXECUTE format('REVOKE ALL ON TABLE public.%I FROM authenticated', t.tablename);
+          END IF;
+        END LOOP;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon';
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM authenticated';
+        END IF;
+      END
+      $rls$;
+    `);
+
   if (process.env.DATABASE_URL) {
     // Several processes can boot at once (next build prerenders in parallel
     // workers), so exactly one runs the DDL while the rest wait. The lock is
@@ -227,6 +260,7 @@ async function migrate(driver: Driver): Promise<void> {
     await driver.withTransaction(async () => {
       await driver.query("SELECT pg_advisory_xact_lock(727272)", []);
       await ddl();
+      await hardenRls();
     });
   } else {
     await ddl();
