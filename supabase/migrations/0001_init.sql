@@ -1,3 +1,13 @@
+-- NOTE: reference copy only. The schema that actually runs is applied by the
+-- application at boot: src/lib/db/schema.ts plus the ALTER migrations in
+-- src/lib/db/core.ts, against DATABASE_URL (or the embedded PGlite fallback).
+-- The app authenticates admins itself (src/lib/admin-auth.ts), so the
+-- auth.users reference below is historical; admin_users additionally carries:
+--   password_hash, totp_secret, totp_last_counter, mfa_enabled, recovery_codes,
+--   token_hash, token_purpose, token_expires_at, is_active, invited_by,
+--   last_login_at
+-- and RLS is enabled with NO policies (see supabase/rls-hardening.sql).
+
 -- Pin High UAE — Postgres schema with Row Level Security
 -- Spec §3 (data model), §11 (security).
 --

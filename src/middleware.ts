@@ -27,7 +27,16 @@ export function middleware(request: NextRequest) {
   }
 
   /* -- Admin gate (§9) --------------------------------------------------- */
-  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+  // Pages a person reaches before they have a session: sign-in and its code
+  // step, forgotten password, and the one-time invite / reset links.
+  const isPublicAdminPath =
+    pathname === "/admin/login" ||
+    pathname === "/admin/login/mfa" ||
+    pathname === "/admin/forgot" ||
+    pathname.startsWith("/admin/invite/") ||
+    pathname.startsWith("/admin/reset/");
+
+  if (pathname.startsWith("/admin") && !isPublicAdminPath) {
     const cookie = request.cookies.get("ph_admin")?.value;
     if (!cookie) {
       const url = new URL("/admin/login", request.url);

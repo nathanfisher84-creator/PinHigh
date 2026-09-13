@@ -1,121 +1,54 @@
-# Deploying to Vercel
+# Deploying
 
-**This is already deployed.** `nathanfisher84-creator/PinHigh` is connected to
-the Vercel project, so every push to `main` redeploys automatically. The rest
-of this file covers how it was set up, what it cannot do yet, and how to open
-the admin panel.
+The site runs on Vercel, connected to this GitHub repository. **Every push to
+`main` deploys to production automatically**; other branches get a preview
+URL. There is nothing to run by hand.
 
-## Redeploying
+- Production: the project's `*.vercel.app` domain until pinhighuae.com is
+  attached (see below).
+- Rollback: Vercel → Deployments → pick the previous one → *Instant Rollback*.
+- Logs: Vercel → Deployments → the deployment → *Logs* (runtime) or
+  *Building* (build).
 
-Just push. Vercel builds from `main`.
+## What production needs
 
-```bash
-git push
-```
+Set under Vercel → Project → Settings → Environment Variables. Redeploy after
+changing any of them.
 
-## Deploying somewhere else
+| Variable | Required | What it is |
+|---|---|---|
+| `DATABASE_URL` | **yes** | Supabase → Connect → *Transaction pooler* URI (port 6543) with the password filled in. Without it nothing written survives a restart, and the site says so on every page. |
+| `SUPABASE_URL` | **yes** | Supabase → Settings → API → *Project URL*. Must start with `https://` — a key pasted here is ignored, loudly, and uploads fall back to temporary disk. |
+| `SUPABASE_SERVICE_ROLE_KEY` | **yes** | Supabase → Settings → API → `service_role`. Server-side only. |
+| `ADMIN_SESSION_SECRET` | **yes** | Any 32+ random characters. Sessions, the stored Gmail password and every authenticator secret are keyed to it — set once, never rotate casually. |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | first boot only | On an empty `admin_users` table the email becomes the owner account and the password works until they choose their own. Ignored afterwards; safe to remove. |
+| `NEXT_PUBLIC_SITE_URL` | when the domain is live | `https://pinhighuae.com`. Turns on indexing, canonical URLs and the sitemap for that host. Leave unset on the `*.vercel.app` address (which stays `noindex`). |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | optional | Shared rate limiting across serverless instances. Without them limits are per instance. |
+| `TURNSTILE_SECRET_KEY`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | optional | Cloudflare bot check on the quote form. Without them the honeypot and rate limit still apply. |
+| `RESEND_API_KEY`, `ORDER_FROM_EMAIL` | optional | Send from the site's own domain once DNS is in hand. Otherwise the owner's Gmail (entered in the admin panel) is used. |
 
-From `pinhigh/`:
+Everything else — email sending, who is notified, who can sign in, the home
+page — is managed inside the admin panel, not here. The dashboard's **System
+status** card shows which of the above are in place without exposing values.
 
-```bash
-npx vercel login
-```
+## Attaching pinhighuae.com (when the time comes)
 
-```bash
-npx vercel --yes
-```
+1. Vercel → Project → Settings → Domains → add `pinhighuae.com` and `www`.
+2. At the registrar, add only the records Vercel shows (an `A`/`ALIAS` for the
+   apex, a `CNAME` for `www`). **Do not touch `MX`, `SPF`, `DKIM` or any `TXT`
+   record** — those are the business's email.
+3. Set `NEXT_PUBLIC_SITE_URL=https://pinhighuae.com` and redeploy.
+4. Check `/robots.txt` and `/sitemap.xml` on the new domain, and that the
+   `*.vercel.app` address still says `noindex`.
 
-The first opens a browser to authenticate. The second uploads, builds and
-prints a URL you can open from any computer. Add `--prod` when you want the
-stable production URL rather than a preview one.
+Lower the DNS TTL a couple of days beforehand and cut over midweek in the
+morning, UAE time. The old Shopify redirect map is in `src/lib/redirects.ts`.
 
-Vercel auto-detects Next.js, so there is nothing to configure.
+## Platform notes
 
-## The better long-term route — connect a repo
-
-The project is already a git repository with one commit. Push it to GitHub and
-Vercel will redeploy on every push:
-
-```bash
-git remote add origin https://github.com/<you>/pinhigh.git
-```
-
-```bash
-git push -u origin main
-```
-
-Then either import it at [vercel.com/new](https://vercel.com/new), or tell me
-the repo name and I'll link and deploy it from here.
-
----
-
-## Read this before you share the URL
-
-**Quote requests and stock uploads will not be kept.**
-
-The app stores everything in a SQLite file. Vercel's filesystem is read-only
-except for `/tmp`, and `/tmp` belongs to a single serverless instance and is
-wiped when that instance recycles. So on Vercel:
-
-- **Browsing works perfectly.** Every instance re-seeds the catalogue from the
-  bundled stock file on cold start — 71 articles, 311 SKUs, real stock figures.
-- **Writes do not survive.** A submitted quote request gets a reference and
-  renders its confirmation, but it lands in one instance's temporary database
-  and the sales team will never see it. The same applies to uploaded product
-  photographs and stock imports.
-- **Uploads are capped at 4.5 MB on Vercel** regardless of the app's own limit,
-  because that is the platform's serverless request-body ceiling. Bulk image
-  packs need to go in small batches there, or straight to blob storage with a
-  signed URL.
-
-The site says so itself: a red banner appears at the top of every page on any
-deployment without a real database. Letting a buyer believe an enquiry had
-landed when it hadn't is the exact failure the quote model exists to prevent
-(§7.1), so it is declared rather than hidden.
-
-**To fix it**, point the app at Postgres. `supabase/migrations/0001_init.sql`
-has the full schema with the RLS policies §11 requires, and
-`src/lib/db/index.ts` is the single seam — everything above it speaks domain
-types and never sees SQL. Set `NEXT_PUBLIC_SUPABASE_URL` and the banner
-disappears on its own.
-
-## The admin panel is locked until you set credentials
-
-With no `ADMIN_EMAIL` / `ADMIN_PASSWORD` in the environment, `/admin` redirects
-to a login that rejects everything and explains why. That is the safe default
-for a public URL, and it is why nothing was set for you.
-
-To open it, add these in **Vercel → Project → Settings → Environment
-Variables**, then redeploy:
-
-| Variable | Notes |
-|---|---|
-| `ADMIN_EMAIL` | Who signs in |
-| `ADMIN_PASSWORD` | Use a strong one — this URL is public |
-| `ADMIN_SESSION_SECRET` | 32+ random characters. Without it, every redeploy signs you out |
-
-Do **not** reuse the values in `.env.local` — those are local development
-throwaways, and `.env.local` is gitignored so they were never deployed.
-
-Remember this is still the placeholder auth described in the README: one shared
-account, no MFA. Spec §2 wants invite-only Supabase Auth with MFA before the
-site is genuinely public.
-
-`.env.example` lists every other variable and what each one costs you if it is
-missing.
-
----
-
-## What was changed to make Vercel work
-
-| Change | Why |
-|---|---|
-| `engines.node: "24.x"` in `package.json` | The store uses `node:sqlite`, which needs a flag on Node 22 and none on 24 |
-| Database path → `/tmp/pinhigh` when `VERCEL` is set | The bundle is read-only; `/tmp` is the only writable path |
-| `outputFileTracingIncludes` for `seed/**` | The seed file is opened via a runtime path that file tracing misses — without it the deployed catalogue boots empty |
-| `src/lib/runtime.ts` | Detects the ephemeral store, and resolves the site's own URL from `VERCEL_URL` |
-| Canonical URLs and sitemap use the deployment URL | Otherwise a preview publishes a sitemap pointing at pinhighuae.com, which is wrong while the real site still lives there |
-| Preview deployments are `noindex` | A preview must not compete with the live site in search results |
-| `EphemeralNotice` banner | Says plainly that writes are not kept |
-
-All 124 tests still pass and the production build is clean with `VERCEL=1` set.
+- `engines.node: 24.x`; the build runs `scripts/db-setup.ts` then `next build`.
+- Request bodies are capped at 4.5 MB by Vercel. Bulk image packs go in
+  batches, or straight to Supabase Storage.
+- The database schema is applied by the application at boot, inside a
+  transaction under an advisory lock, so a redeploy is a migration.
+- `.env.example` lists every variable with what each one costs you if missing.

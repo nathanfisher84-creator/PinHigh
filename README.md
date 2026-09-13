@@ -54,7 +54,8 @@ The confirmation page and the admin quote view print cleanly to PDF from the
 browser, and the notification email carries a CSV of the lines. A server-side
 PDF renderer was not worth the dependency for this milestone.
 
-**Auth is a placeholder.** See "Before cutover".
+**WhatsApp to buyers is a link, not a channel.** The "message us" button on
+the confirmation screen opens `wa.me`; nothing is sent server-side.
 
 ---
 
@@ -88,14 +89,23 @@ tests/                    131 tests, node:test, no test framework dependency
 
 ### Two decisions that depart from the spec
 
-**Storage is SQLite, not Supabase.** §2 specifies Supabase Postgres and that is
-still the target — `supabase/migrations/0001_init.sql` carries the same schema
-with the RLS policies §11 requires. But provisioning a Supabase project needs
-credentials that don't exist yet, and a catalogue nobody can run is not
-reviewable. The application talks to `src/lib/db/index.ts` in domain types and
-never sees SQL, so swapping means reimplementing the query helpers in
-`db/core.ts` against `@supabase/supabase-js`. Nothing in the components,
-actions or importer changes.
+**Postgres through the `pg` driver, not `supabase-js`.** §2 specifies Supabase
+and that is where production runs — `DATABASE_URL` points at the project's
+transaction pooler — but the application never touches Supabase's REST/Data
+API. Every query runs server-side as the table owner, the schema is applied by
+the app at boot (`src/lib/db/schema.ts` plus the migrations in `db/core.ts`),
+and RLS is enabled with no policies so the auto-generated API is closed. With
+no `DATABASE_URL` the same SQL runs against an embedded PGlite database, which
+is how the test suite and local development work with zero setup.
+`supabase/migrations/0001_init.sql` is a reference copy, not what runs.
+
+**Admin sign-in is the app's own, not Supabase Auth.** §2 asks for invite-only
+accounts with MFA; that is what `src/lib/admin-auth.ts` provides — per-user
+passwords (scrypt), an authenticator app (TOTP, RFC 6238) required on every
+account, recovery codes, owner-issued invitations and password resets — on
+the `admin_users` table, with no external identity service. Choosing this over
+Supabase Auth keeps the deny-all API posture above intact and gives the client
+one place to manage people: the Users page.
 
 **The XLSX reader is hand-written, not SheetJS.** §2 names SheetJS. Its npm
 distribution is pinned at 0.18.5 and carries CVE-2023-30533 (prototype
@@ -330,13 +340,13 @@ silently overridden, per §0.
 
 ## Before cutover
 
-**Auth must be replaced.** `src/lib/auth.ts` is a signed, HTTP-only, 12-hour
-session cookie in front of a single shared password from the environment. The
-session layer is sound and middleware gates every `/admin` route with the page
-re-verifying the signature properly. What it is not is what §2 requires:
-invite-only Supabase Auth, per-user accounts, MFA enforced.
-`verifyCredentials()` is the only function that compares a password — that is
-the seam. Do this before the site is publicly reachable.
+**Set `ADMIN_SESSION_SECRET` and keep it.** Sessions, the stored Gmail app
+password and every account's authenticator secret are keyed to it. Rotating it
+signs everyone out, blanks the Gmail password (re-enter it under Settings) and
+means every account re-enrols its authenticator (recovery codes still work).
+`ADMIN_EMAIL` / `ADMIN_PASSWORD` are only the first-boot bootstrap: once the
+owner has chosen their own password the pair is ignored and can be removed.
+The owner's own runbook is `HANDOVER.md`; the in-app version is Admin → Help.
 
 **Rebuild the redirect map from the real export.** `src/lib/redirects.ts` is
 seeded with the collection handles a Shopify golf store would normally carry.

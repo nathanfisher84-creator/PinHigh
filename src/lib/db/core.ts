@@ -205,6 +205,23 @@ async function migrate(driver: Driver): Promise<void> {
       );
       CREATE INDEX IF NOT EXISTS idx_quote_logos ON quote_logos(quote_request_id);
     `);
+    // Admin accounts (spec §2): per-user passwords and a second factor, so
+    // the owner adds and removes staff without touching the environment.
+    // The TOTP secret is sealed like the Gmail app password; recovery codes
+    // and one-time tokens are stored hashed, like passwords.
+    await driver.exec(`
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_last_counter TEXT;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS mfa_enabled INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS recovery_codes TEXT;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS token_hash TEXT;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS token_purpose TEXT;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS token_expires_at TEXT;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS invited_by TEXT;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS last_login_at TEXT;
+    `);
     // Widen the status check so staff can approve / cancel a request.
     // Postgres names a column CHECK `{table}_{column}_check`.
     await driver.exec(`

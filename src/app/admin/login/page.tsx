@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
+import { adminConfigured } from "@/lib/admin-auth";
 import { LoginForm } from "@/components/admin/LoginForm";
 import { Logo } from "@/components/shell/Logo";
 
@@ -21,6 +22,8 @@ export default async function AdminLoginPage({
   // Already signed in — no reason to show a login form.
   if (await getSession()) redirect(next ?? "/admin");
 
+  const configured = await adminConfigured();
+
   return (
     <div className="min-h-dvh bg-paper flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
@@ -30,7 +33,16 @@ export default async function AdminLoginPage({
           Stock, quote requests and settings for pinhighuae.com.
         </p>
 
-        <LoginForm next={next ?? "/admin"} />
+        {configured ? (
+          <LoginForm next={next ?? "/admin"} />
+        ) : (
+          <p className="mt-8 hairline border-flag bg-flag-wash px-4 py-3 text-sm" role="alert">
+            <strong>No admin account exists yet.</strong> For the very first
+            sign-in, set <code>ADMIN_EMAIL</code> and <code>ADMIN_PASSWORD</code> in
+            the deployment’s environment. After that, accounts are managed from
+            inside the panel.
+          </p>
+        )}
       </div>
     </div>
   );

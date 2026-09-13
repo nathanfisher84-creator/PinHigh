@@ -39,6 +39,11 @@ function supabaseConfigured(): boolean {
   return Boolean(SUPABASE_URL && SERVICE_KEY);
 }
 
+/** For the admin status card: where uploads actually go on this deployment. */
+export function storageBackend(): "supabase" | "disk" {
+  return supabaseConfigured() ? "supabase" : "disk";
+}
+
 const ROOT = path.join(
   process.env.PINHIGH_DATA_DIR ??
     (process.env.VERCEL ? "/tmp/pinhigh" : path.join(process.cwd(), ".data")),
