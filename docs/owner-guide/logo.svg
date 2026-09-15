@@ -1,0 +1,15 @@
+<svg width="100" height="118" viewBox="0 0 100 118" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="50" cy="46" r="38" stroke="#1B2A47" stroke-width="8.5"/>
+  <g fill="#1B2A47">
+    <circle cx="24.7" cy="27.3" r="2.6"/><circle cx="30.5" cy="20.6" r="2.6"/><circle cx="37.7" cy="15.6" r="2.6"/><circle cx="45.9" cy="12.6" r="2.6"/><circle cx="54.6" cy="11.8" r="2.6"/><circle cx="63.1" cy="13.3" r="2.6"/><circle cx="70.9" cy="17.0" r="2.6"/><circle cx="77.5" cy="22.6" r="2.6"/><circle cx="82.5" cy="29.8" r="2.6"/><circle cx="85.5" cy="38.0" r="2.6"/>
+    <circle cx="34.4" cy="30.4" r="2.1"/><circle cx="39.5" cy="26.0" r="2.1"/><circle cx="45.4" cy="23.0" r="2.1"/><circle cx="51.9" cy="21.6" r="2.1"/><circle cx="58.5" cy="21.9" r="2.1"/><circle cx="64.8" cy="23.9" r="2.1"/><circle cx="70.4" cy="27.4" r="2.1"/><circle cx="74.9" cy="32.3" r="2.1"/>
+  </g>
+  <clipPath id="b"><circle cx="50" cy="46" r="33.5"/></clipPath>
+  <g clip-path="url(#b)">
+    <path d="M 46 80 Q 66 48 88 72 L 88 80 Z" fill="#5CB947"/>
+    <path d="M 8 82 Q 34 46 62 82 Z" fill="#5CB947"/>
+  </g>
+  <rect x="48.4" y="26" width="3.2" height="42" rx="1.2" fill="#1B2A47"/>
+  <path d="M 51.5 27 L 67 32.5 L 51.5 38 Z" fill="#D93A2B"/>
+  <path d="M 32 76 Q 50 92 68 76 L 52.5 112 Q 50 117 47.5 112 Z" fill="#5CB947"/>
+</svg>

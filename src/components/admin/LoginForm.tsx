@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { login } from "@/app/admin/actions";
@@ -59,6 +60,12 @@ export function LoginForm({ next }: { next: string }) {
       )}
 
       <SubmitButton />
+
+      <p className="mt-4 text-center text-sm">
+        <Link href="/admin/forgot" className="text-graphite-ink underline underline-offset-2 hover:text-fairway">
+          Forgotten your password?
+        </Link>
+      </p>
     </form>
   );
 }

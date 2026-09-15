@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pin High UAE — Owner's Guide</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; src: url("fonts/inter-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 500; src: url("fonts/inter-latin-500-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; src: url("fonts/inter-latin-600-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; src: url("fonts/inter-latin-700-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Archivo"; font-weight: 700; src: url("fonts/archivo-latin-700-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Archivo"; font-weight: 800; src: url("fonts/archivo-latin-800-normal.woff2") format("woff2"); }
+  @font-face { font-family: "JetBrains Mono"; font-weight: 500; src: url("fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
+
+  :root {
+    --navy: #1B2A47; --green: #5CB947; --green-ink: #2E7D32; --red: #D93A2B; --amber: #D9A400;
+    --ink: #1a1a1a; --muted: #5b6472; --line: #e3e5e8; --paper: #ffffff; --wash: #f4f6f4; --red-wash: #fdf1ef; --green-wash: #eef7ec; --amber-wash: #fff8e1;
+  }
+  @page { size: A4; margin: 16mm 0 18mm; }
+  @page :first { margin: 0; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: Inter, system-ui, sans-serif; font-size: 10.5pt; line-height: 1.5; color: var(--ink); background: var(--paper); }
+  .page-body { padding: 0 16mm; }
+  h1, h2, h3, h4 { font-family: Archivo, Inter, sans-serif; color: var(--navy); line-height: 1.15; margin: 0; }
+  h1 { font-size: 26pt; font-weight: 800; letter-spacing: -0.01em; }
+  h2 { font-size: 15pt; font-weight: 700; margin-top: 8mm; margin-bottom: 2mm; break-after: avoid; }
+  h3 { font-size: 11.5pt; font-weight: 700; margin-top: 5mm; margin-bottom: 1.5mm; break-after: avoid; }
+  p { margin: 0 0 2.6mm; }
+  a { color: var(--navy); }
+  code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.92em; }
+  strong { font-weight: 600; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1mm; }
+
+  /* chapter openers */
+  .chapter { break-before: page; }
+  .chapter-head { border-bottom: 3px solid var(--green); padding-bottom: 3mm; margin-bottom: 5mm; display: flex; align-items: baseline; gap: 4mm; }
+  .chapter-num { font-family: Archivo, sans-serif; font-weight: 800; font-size: 26pt; color: var(--green); line-height: 1; }
+  .lede { font-size: 11.5pt; color: var(--muted); margin-bottom: 5mm; }
+
+  /* cover */
+  .cover { height: 297mm; box-sizing: border-box; background: var(--navy); color: #fff; padding: 28mm 22mm; position: relative; display: flex; flex-direction: column; break-after: page; }
+  .cover .brand { display: flex; align-items: center; gap: 6mm; }
+  .cover .wordmark { font-family: Archivo, sans-serif; font-weight: 800; font-size: 34pt; letter-spacing: -0.02em; }
+  .cover .wordmark span { color: var(--green); }
+  .cover h1 { color: #fff; font-size: 40pt; margin-top: 40mm; max-width: 140mm; }
+  .cover .sub { font-size: 14pt; color: #c7d0e0; margin-top: 6mm; max-width: 130mm; line-height: 1.4; }
+  .cover .meta { margin-top: auto; font-size: 10pt; color: #9aa7bd; display: flex; gap: 10mm; }
+  .cover .stripe { position: absolute; left: 0; right: 0; bottom: 0; height: 6mm; background: var(--green); }
+
+  /* contents */
+  .toc { columns: 2; column-gap: 10mm; }
+  .toc div { break-inside: avoid; display: flex; gap: 3mm; padding: 1.6mm 0; border-bottom: 1px solid var(--line); }
+  .toc .n { font-family: Archivo, sans-serif; font-weight: 800; color: var(--green); width: 7mm; }
+
+  /* steps */
+  .steps { list-style: none; padding: 0; margin: 2mm 0 4mm; counter-reset: step; }
+  .steps li { counter-increment: step; display: grid; grid-template-columns: 9mm 1fr; gap: 3mm; margin-bottom: 2.5mm; break-inside: avoid; }
+  .steps li::before { content: counter(step); font-family: Archivo, sans-serif; font-weight: 800; font-size: 12pt; color: #fff; background: var(--green); border-radius: 50%; width: 8mm; height: 8mm; display: flex; align-items: center; justify-content: center; line-height: 1; }
+  .steps li > div { padding-top: 1mm; }
+
+  /* figures */
+  figure { margin: 3mm 0 5mm; break-inside: avoid; }
+  figure img { display: block; width: 100%; border: 1px solid var(--line); border-radius: 2mm; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  figure.crop .frame { overflow: hidden; border: 1px solid var(--line); border-radius: 2mm; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  figure.crop .frame img { border: 0; border-radius: 0; box-shadow: none; }
+  figure.w45 { width: 45%; } figure.w60 { width: 60%; } figure.w70 { width: 70%; } figure.w80 { width: 80%; } figure.w90 { width: 90%; }
+  figure.center { margin-left: auto; margin-right: auto; }
+  figcaption { font-size: 9pt; color: var(--muted); margin-top: 1.8mm; }
+  figcaption b { color: var(--navy); font-weight: 600; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; align-items: start; }
+  .two figure { margin-top: 0; }
+
+  /* callout key */
+  .key { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5mm 6mm; margin: 2mm 0 4mm; font-size: 10pt; }
+  .key div { display: flex; gap: 2.5mm; align-items: baseline; }
+  .badge { display: inline-flex; align-items: center; justify-content: center; width: 5.5mm; height: 5.5mm; border-radius: 50%; background: var(--red); color: #fff; font-weight: 700; font-size: 8.5pt; flex-shrink: 0; transform: translateY(1px); }
+
+  /* notes */
+  .note { border-left: 4px solid var(--green); background: var(--green-wash); padding: 3mm 4mm; margin: 3mm 0 4mm; break-inside: avoid; border-radius: 0 2mm 2mm 0; }
+  .note .t { font-weight: 700; color: var(--green-ink); font-size: 9pt; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1mm; }
+  .note.important { border-color: var(--navy); background: #eef1f6; } .note.important .t { color: var(--navy); }
+  .note.warning { border-color: var(--red); background: var(--red-wash); } .note.warning .t { color: var(--red); }
+  .note p:last-child { margin-bottom: 0; }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9.8pt; }
+  th, td { text-align: left; padding: 2mm 2.5mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--wash); font-weight: 600; color: var(--navy); font-size: 9pt; text-transform: uppercase; letter-spacing: .05em; }
+  tr { break-inside: avoid; }
+
+  /* diagrams built from HTML */
+  .flow { display: flex; align-items: stretch; gap: 0; margin: 4mm 0 5mm; break-inside: avoid; }
+  .flow .box { flex: 1; background: var(--wash); border: 1.5px solid var(--navy); border-radius: 2mm; padding: 2.5mm 3mm; font-size: 9.2pt; line-height: 1.35; display: flex; flex-direction: column; justify-content: center; }
+  .flow .box b { display: block; color: var(--navy); font-size: 9.6pt; margin-bottom: 0.8mm; }
+  .flow .box.you { border-color: var(--green); background: var(--green-wash); }
+  .flow .box.buyer { border-color: #8a94a6; background: #f7f8fa; }
+  .flow .box.alert { border-color: var(--red); background: var(--red-wash); }
+  .flow .arrow { width: 7mm; flex: none; display: flex; align-items: center; justify-content: center; color: var(--navy); }
+  .flow .arrow svg { width: 5mm; height: 5mm; }
+  .legend { display: flex; gap: 6mm; font-size: 9pt; color: var(--muted); margin-top: -3mm; margin-bottom: 5mm; }
+  .legend span::before { content: ""; display: inline-block; width: 3.5mm; height: 3.5mm; border-radius: 1mm; margin-right: 1.5mm; vertical-align: -0.5mm; border: 1.5px solid; }
+  .legend .l-buyer::before { border-color: #8a94a6; background: #f7f8fa; }
+  .legend .l-site::before { border-color: var(--navy); background: var(--wash); }
+  .legend .l-you::before { border-color: var(--green); background: var(--green-wash); }
+
+  .tree { margin: 3mm 0 5mm; break-inside: avoid; font-size: 9.6pt; }
+  .tree .q { background: var(--navy); color: #fff; display: inline-block; padding: 1.8mm 3.5mm; border-radius: 2mm; font-weight: 600; }
+  .tree .branches { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 2.5mm; }
+  .tree .branch { border: 1.5px solid var(--line); border-radius: 2mm; padding: 2.5mm 3mm; background: #fff; }
+  .tree .branch .ans { font-weight: 700; color: var(--green-ink); font-size: 9pt; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1mm; }
+  .tree .branch.no .ans { color: var(--red); }
+  .tree .branch ol { margin: 0; padding-left: 4.5mm; }
+
+  .dots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; margin: 3mm 0 5mm; break-inside: avoid; }
+  .dots div { border: 1px solid var(--line); border-radius: 2mm; padding: 3mm; font-size: 9.6pt; }
+  .dots .dot { width: 4mm; height: 4mm; border-radius: 50%; display: inline-block; margin-right: 2mm; vertical-align: -0.6mm; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; margin: 3mm 0 5mm; break-inside: avoid; }
+  .cols > div { border-radius: 2mm; padding: 3.5mm 4mm; }
+  .cols .you { background: var(--green-wash); border: 1.5px solid var(--green); }
+  .cols .dev { background: #eef1f6; border: 1.5px solid var(--navy); }
+  .cols h4 { font-size: 10.5pt; margin-bottom: 1.5mm; }
+  .cols ul { margin-bottom: 0; }
+
+  .timeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; margin: 3mm 0 5mm; break-inside: avoid; }
+  .timeline div { border-top: 4px solid var(--green); padding-top: 2mm; font-size: 9.4pt; }
+  .timeline b { display: block; color: var(--navy); font-family: Archivo, sans-serif; font-size: 11pt; margin-bottom: 1mm; }
+  .timeline ul { padding-left: 4mm; margin: 0; }
+
+  .quickref { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .quickref .card { border: 1.5px solid var(--line); border-radius: 2mm; padding: 3.5mm 4mm; break-inside: avoid; }
+  .quickref h4 { font-size: 10.5pt; margin-bottom: 1.5mm; }
+  .quickref ul { margin: 0; padding-left: 4.5mm; font-size: 9.6pt; }
+  .kv td:first-child { color: var(--muted); width: 38%; }
+  .small { font-size: 9pt; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<section class="cover">
+  <div class="brand">
+    <img src="logo-light.svg" alt="" style="width:26mm;height:auto">
+    <div class="wordmark"><span>PIN</span>HIGH</div>
+  </div>
+  <h1>Owner's Guide to your website</h1>
+  <div class="sub">How to run the Pin High UAE catalogue and quote platform day to day — signing in, handling requests, keeping stock current, and what to do when something goes wrong. No technical knowledge needed.</div>
+  <div class="meta"><span>Version 1.0</span><span>September 2026</span><span>Applies to the admin panel at <span class="mono">/admin</span></span></div>
+  <div class="stripe"></div>
+</section>
+
+<div class="page-body">
+
+<!-- ============================ CONTENTS ============================ -->
+<section>
+  <h1>Contents</h1>
+  <p class="lede">Each chapter stands on its own. If you only read one, read <b>Chapter 10 — When something isn't right</b>.</p>
+  <div class="toc">
+    <div><span class="n">1</span><span>What your website does</span></div>
+    <div><span class="n">2</span><span>Signing in for the first time</span></div>
+    <div><span class="n">3</span><span>Signing in every day</span></div>
+    <div><span class="n">4</span><span>Your dashboard</span></div>
+    <div><span class="n">5</span><span>Handling a quote request</span></div>
+    <div><span class="n">6</span><span>Keeping stock current</span></div>
+    <div><span class="n">7</span><span>Products and photos</span></div>
+    <div><span class="n">8</span><span>Email: sending, and who gets notified</span></div>
+    <div><span class="n">9</span><span>Editing your public website</span></div>
+    <div><span class="n">10</span><span>When something isn't right</span></div>
+    <div><span class="n">11</span><span>People and access</span></div>
+    <div><span class="n">12</span><span>Your own security</span></div>
+    <div><span class="n">13</span><span>Lost phone, forgotten password</span></div>
+    <div><span class="n">14</span><span>A rhythm for running the site</span></div>
+    <div><span class="n">15</span><span>Quick reference</span></div>
+    <div><span class="n">16</span><span>Glossary</span></div>
+  </div>
+
+  <h2>How to use this guide</h2>
+  <p>Numbered red circles on a picture match the numbered steps beside it. Green <b>Tip</b> boxes are shortcuts; navy <b>Important</b> boxes are things to remember; red <b>Careful</b> boxes are where a mistake costs something.</p>
+  <div class="note"><div class="t">Tip</div><p>Everything in this guide is also inside the admin panel under <b>Help</b>, so you always have it to hand — even without this document.</p></div>
+  <div class="note important"><div class="t">Important</div><p>The pictures were taken on a test copy of the site. Your own site will show your real products, requests and names — the buttons and layout are the same.</p></div>
+</section>
+
+<!-- ============================ 1 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">1</span><h1>What your website does</h1></div>
+  <p class="lede">Pin High UAE is a trade catalogue with a quote-request form. Buyers choose kit and sizes, place their logo on it, and send you a request. You price it and reply. <b>Nothing is charged online and no stock is reserved until you approve.</b></p>
+
+  <h2>The journey of a request</h2>
+  <div class="flow">
+    <div class="box buyer"><b>1. Buyer browses</b>Catalogue and product pages, live availability per size.</div>
+    <div class="arrow"><svg viewBox="0 0 20 20"><path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="box buyer"><b>2. Builds a size run</b>Quantities per size, logo placed on the photo.</div>
+    <div class="arrow"><svg viewBox="0 0 20 20"><path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="box buyer"><b>3. Sends a request</b>Company, contact, delivery, notes, logo files.</div>
+    <div class="arrow"><svg viewBox="0 0 20 20"><path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="box"><b>4. The site</b>Saves it, emails your team a summary and spreadsheet, confirms to the buyer.</div>
+    <div class="arrow"><svg viewBox="0 0 20 20"><path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="box you"><b>5. You</b>Price it, reply, and mark it Quoted → Approved / Won or Lost.</div>
+  </div>
+  <div class="legend"><span class="l-buyer">The buyer</span><span class="l-site">The website, automatically</span><span class="l-you">You, in the admin panel</span></div>
+
+  <div class="two">
+    <figure class="crop"><div class="frame" style="height:78mm"><img src="shots/public-home.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Home page.</b> The headline, text, photos and banner are all yours to change (Chapter 9).</figcaption></figure>
+    <figure class="crop"><div class="frame" style="height:78mm"><img src="shots/public-catalogue.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Catalogue.</b> Only styles you have made visible appear. No prices are shown to buyers.</figcaption></figure>
+  </div>
+
+  <h2>What a buyer sees on a product</h2>
+  <figure class="crop"><div class="frame" style="height:100mm"><img src="shots/public-product-sizes.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Product page.</b> The size run shows how many of each size you hold; the buyer types quantities straight in. Retail RRP is shown and labelled as retail — <i>not</i> the quote. "See your logo on this" lets them drag their logo onto the photo.</figcaption></figure>
+
+  <div class="two">
+    <figure class="crop"><div class="frame" style="height:78mm"><img src="shots/public-quote-form.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>The request form.</b> Their lines, logo files, company and contact details, delivery emirate and date needed.</figcaption></figure>
+    <figure class="crop"><div class="frame" style="height:78mm"><img src="shots/public-quote-confirmation.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Confirmation.</b> A reference like <span class="mono">PH-Q-2026-0001</span>, a plain statement that this is a request not an order, and the response time you have promised.</figcaption></figure>
+  </div>
+  <div class="note important"><div class="t">Important</div><p>The words "request", "not an order" and "nothing has been charged" are deliberate. A buyer who believes they have ordered is the most expensive misunderstanding in this business. Keep that language in anything you send.</p></div>
+</section>
+
+<!-- ============================ 2 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">2</span><h1>Signing in for the first time</h1></div>
+  <p class="lede">Every person has their own email, password and an <b>authenticator app</b> on their phone. The first sign-in sets the app up. It takes about two minutes.</p>
+
+  <h2>Before you start</h2>
+  <ul>
+    <li>Your email address and the starting password (from whoever set the site up).</li>
+    <li>Your phone, with an authenticator app installed: <b>Google Authenticator</b> or <b>Microsoft Authenticator</b> (free, from the App Store or Google Play). If you already use 1Password or Bitwarden, those work too.</li>
+    <li>Somewhere safe to keep eight recovery codes — a password manager, or a printout in a locked drawer.</li>
+  </ul>
+
+  <h2>Step by step</h2>
+  <div class="two">
+    <div>
+      <ol class="steps">
+        <li><div>Go to your site's address followed by <span class="mono">/admin</span>. You'll see the sign-in page.</div></li>
+        <li><div>Enter your <b>email</b> <span class="badge">1</span> and starting <b>password</b> <span class="badge">2</span>, then <b>Sign in</b> <span class="badge">3</span>.</div></li>
+        <li><div>Because no authenticator is set up yet, you are taken straight to the <b>Security</b> page.</div></li>
+      </ol>
+    </div>
+    <figure><img src="shots/login-annotated.png" alt=""><figcaption><b>Sign-in page.</b> <span class="badge">4</span> is for later — "Forgotten your password?" (Chapter 13).</figcaption></figure>
+  </div>
+
+  <figure><img src="shots/security-enrol-annotated.png" alt=""><figcaption><b>Setting up the authenticator.</b> Scan <span class="badge">1</span>, or type the key <span class="badge">2</span> by hand; enter the six digits <span class="badge">3</span>; press Turn on <span class="badge">4</span>.</figcaption></figure>
+
+  <ol class="steps" start="4">
+    <li><div>On your phone, open the authenticator app and choose <b>Add</b> (usually a <b>+</b>), then <b>Scan a QR code</b>. Point the camera at the square <span class="badge">1</span>.</div></li>
+    <li><div>Can't scan? Choose <b>Enter a setup key</b> in the app, give it the name <b>Pin High UAE</b>, and type the key shown at <span class="badge">2</span>.</div></li>
+    <li><div>The app now shows a six-digit number for Pin High that changes every 30 seconds. Type the current one at <span class="badge">3</span> and press <b>Turn on</b> <span class="badge">4</span>.</div></li>
+  </ol>
+
+  <div class="two">
+    <figure><img src="shots/security-recovery-codes.png" alt=""><figcaption><b>Your recovery codes.</b> Shown once. Each signs you in once if your phone is lost.</figcaption></figure>
+    <div>
+      <ol class="steps" start="7">
+        <li><div><b>Save the eight recovery codes now.</b> Use <b>Print</b> or <b>Copy all</b> and put them somewhere safe. They will not be shown again.</div></li>
+        <li><div>Tick <b>I've saved these somewhere safe</b>, then <b>Continue to the dashboard</b>.</div></li>
+        <li><div>Still on the Security page later: change the starting password to one only you know (Chapter 12).</div></li>
+      </ol>
+      <div class="note warning"><div class="t">Careful</div><p>Without recovery codes, a lost phone means asking another owner to reset you — and if you are the only owner, it means a developer. Keep the codes.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 3 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">3</span><h1>Signing in every day</h1></div>
+  <p class="lede">Two steps: password, then the six-digit code from your phone. You stay signed in for 12 hours.</p>
+
+  <div class="flow">
+    <div class="box you"><b>Email + password</b>On the sign-in page.</div>
+    <div class="arrow"><svg viewBox="0 0 20 20"><path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="box you"><b>Six-digit code</b>From the authenticator app. Use the newest one.</div>
+    <div class="arrow"><svg viewBox="0 0 20 20"><path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="box"><b>Signed in</b>For 12 hours, then sign in again.</div>
+  </div>
+
+  <div class="two">
+    <figure><img src="shots/login-mfa.png" alt=""><figcaption><b>The code step.</b> Type the six digits; spaces are fine. A recovery code goes in the same box.</figcaption></figure>
+    <div>
+      <h3>Things worth knowing</h3>
+      <ul>
+        <li>The code changes every 30 seconds. If one is rejected, wait for the next and try that.</li>
+        <li>A code can only be used once — that's normal, not a fault.</li>
+        <li>After too many wrong attempts you're paused for a short while. Wait, then try again.</li>
+        <li><b>Sign out</b> is top-right, on every admin page.</li>
+        <li>Your email address in the top bar is a link to your own Security page.</li>
+      </ul>
+      <div class="note"><div class="t">Tip</div><p>Add the sign-in page to your phone's home screen and your browser's bookmarks. The address is your site's address plus <span class="mono">/admin</span>.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 4 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">4</span><h1>Your dashboard</h1></div>
+  <p class="lede">The first page after signing in. It is ordered by what costs the business money if missed: problems first, then anything waiting on you, then the numbers.</p>
+
+  <figure><img src="shots/dashboard-annotated.png" alt=""><figcaption><b>Dashboard.</b> <span class="badge">1</span> System status · <span class="badge">2</span> the sections of the panel · <span class="badge">3</span> requests waiting for a reply · <span class="badge">4</span> straight to a stock upload.</figcaption></figure>
+
+  <h2>Reading the System status card</h2>
+  <p>Each line is one connection the site depends on. Green is fine. Amber is worth knowing. Red means something is not working — and each red line says <b>who</b> can fix it: a link into the panel if it's yours, or "needs your developer" if it lives in the hosting.</p>
+  <div class="dots">
+    <div><span class="dot" style="background:var(--green)"></span><b>Green</b> — connected and working. Nothing to do.</div>
+    <div><span class="dot" style="background:var(--amber)"></span><b>Amber</b> — working, with a caveat. Read it once; act when convenient.</div>
+    <div><span class="dot" style="background:var(--red)"></span><b>Red</b> — not working. Usually means requests are not reaching anyone. Act today.</div>
+  </div>
+
+  <table>
+    <tr><th style="width:26%">Line</th><th>What it means</th><th style="width:22%">Who fixes it</th></tr>
+    <tr><td><b>Database</b></td><td>Where requests, stock and settings are kept. Red means nothing written is being saved.</td><td>Developer</td></tr>
+    <tr><td><b>Email sending</b></td><td>The account the site sends from. Red means nobody is emailed and buyers get no confirmation.</td><td><b>You</b> — Settings → Email sending (Chapter 8)</td></tr>
+    <tr><td><b>Who gets quote requests</b></td><td>The addresses that receive each request. Red means there are none.</td><td><b>You</b> — Recipients (Chapter 8)</td></tr>
+    <tr><td><b>Photos and artwork</b></td><td>Where product photos and buyers' logos are stored. Red means uploads vanish on restart.</td><td>Developer</td></tr>
+    <tr><td><b>Sign-in security</b></td><td>Red means everyone is signed out on each update and authenticators can't be saved.</td><td>Developer — one setting</td></tr>
+    <tr><td><b>Admin accounts</b></td><td>Amber if someone has no authenticator yet, or if there is only one owner.</td><td><b>You</b> — Users (Chapter 11)</td></tr>
+    <tr><td><b>Form abuse limits</b> / <b>Bot check</b></td><td>Optional protections on the request form. Amber is acceptable.</td><td>Developer, optional</td></tr>
+  </table>
+
+  <h2>Below the card</h2>
+  <ul>
+    <li><b>Failed notifications</b> and <b>requests waiting more than 24 hours</b> appear above the numbers in red when there are any. Deal with those first.</li>
+    <li><b>Awaiting a response</b> is a link straight to the new requests.</li>
+    <li><b>Stock</b> shows when the last upload was and how many sizes are running low.</li>
+  </ul>
+</section>
+
+<!-- ============================ 5 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">5</span><h1>Handling a quote request</h1></div>
+  <p class="lede">A request is a lead. The panel keeps every line, size and logo the buyer sent, and tracks where you are with it.</p>
+
+  <h2>When a request arrives</h2>
+  <ol class="steps">
+    <li><div>Everyone on the <b>Recipients</b> list gets an email: a summary plus a spreadsheet of the lines. The buyer gets a confirmation with their reference.</div></li>
+    <li><div>It appears on the dashboard under <b>Awaiting a response</b> and in <b>Quote requests</b> with the status <b>New</b>.</div></li>
+    <li><div>Open it, price it, and send the buyer your quote by email as you normally would. Then set the status so the team can see where it is.</div></li>
+  </ol>
+
+  <figure class="crop"><div class="frame" style="height:48mm"><img src="shots/quotes-list.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Quote requests.</b> Filter by status; export everything as a spreadsheet from the button at the top.</figcaption></figure>
+  <figure class="crop"><div class="frame" style="height:92mm"><img src="shots/quote-detail.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>One request.</b> Lines and sizes, the buyer's details and notes, any logo files, the status control, and downloads (Excel with retail RRP in AED — never wholesale or cost).</figcaption></figure>
+
+  <h2>Statuses, and what touches stock</h2>
+  <div class="flow">
+    <div class="box"><b>New</b>Just arrived.</div>
+    <div class="arrow"><svg viewBox="0 0 20 20"><path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="box"><b>In progress</b>Someone is on it.</div>
+    <div class="arrow"><svg viewBox="0 0 20 20"><path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="box"><b>Quoted</b>Price sent to the buyer.</div>
+    <div class="arrow"><svg viewBox="0 0 20 20"><path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="box you"><b>Approved</b>Buyer said yes. <b>Stock is taken here.</b></div>
+    <div class="arrow"><svg viewBox="0 0 20 20"><path d="M4 10h11M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="box you"><b>Won</b>Delivered and done.</div>
+  </div>
+  <div class="flow" style="margin-top:-2mm">
+    <div class="box alert" style="flex:0 0 32%"><b>Lost · Cancelled · Expired</b>Never touch stock.</div>
+    <div class="box" style="flex:1;border-style:dashed"><b>Changed your mind?</b> Moving a request back off Approved puts the units back into stock automatically.</div>
+  </div>
+
+  <h3>Editing a request</h3>
+  <p>Lines, quantities and notes can be corrected after a request lands — until stock has been taken. If you need to change an Approved request, move it back to Quoted first, edit, then approve again.</p>
+
+  <div class="note important"><div class="t">Important</div><p>Anything sitting in <b>New</b> for more than 24 hours is flagged on the dashboard. The buyer was promised a response time on their confirmation (you set it under Settings → Quoting) — keep to it.</p></div>
+  <div class="note"><div class="t">Tip</div><p><b>Resend notifications</b> on a request re-sends the emails — useful after fixing email sending, or when a new colleague joins the Recipients list.</p></div>
+</section>
+
+<!-- ============================ 6 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">6</span><h1>Keeping stock current</h1></div>
+  <p class="lede">The size grid buyers see comes from your last stock upload, minus anything approved since. Upload after every adidas delivery.</p>
+
+  <figure class="crop"><div class="frame" style="height:46mm"><img src="shots/stock.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Stock.</b> Upload the two adidas files; the page tells you exactly which columns it read and anything it could not match.</figcaption></figure>
+
+  <h2>Uploading a delivery</h2>
+  <ol class="steps">
+    <li><div>Go to <b>Stock</b>. Choose the adidas <b>implementation file</b> (the template with articles and sizes) and the <b>invoice</b> (the quantities). Both are the spreadsheets adidas sends you.</div></li>
+    <li><div>Press upload. The site reads the files and shows a <b>preview</b>: new styles, quantities that will change, and anything it could not match to a known article.</div></li>
+    <li><div>Read the preview. If a column was picked up wrongly, fix the mapping on screen — the site remembers your choice for next time.</div></li>
+    <li><div><b>Confirm.</b> Quantities go live on the public size grids immediately. The dashboard shows the upload time.</div></li>
+    <li><div>Single sizes can be adjusted by hand from the same page (a damaged item, a sample given away). Every adjustment is recorded in History with your name.</div></li>
+  </ol>
+
+  <div class="two">
+    <figure class="crop"><div class="frame" style="height:33mm"><img src="shots/stock-history.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Stock → History.</b> Every change to every size, with what caused it: an upload, an approved request, a manual adjustment.</figcaption></figure>
+    <figure class="crop"><div class="frame" style="height:33mm"><img src="shots/stock-uploads.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Stock → Uploads.</b> Past uploads. If one was wrong, <b>roll it back</b> here and upload again.</figcaption></figure>
+  </div>
+
+  <div class="note warning"><div class="t">Careful</div><p>A wrong upload shows buyers stock you don't have. Read the preview before confirming; if it has gone live, roll it back from Stock → Uploads rather than correcting sizes one by one.</p></div>
+</section>
+
+<!-- ============================ 7 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">7</span><h1>Products and photos</h1></div>
+  <p class="lede">Products arrive from the stock upload. Here you decide what buyers see and how it looks.</p>
+
+  <figure class="crop"><div class="frame" style="height:78mm"><img src="shots/products.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Products.</b> Every article the site knows, with its photos, visibility and category.</figcaption></figure>
+
+  <h2>Common jobs</h2>
+  <table>
+    <tr><th style="width:32%">To…</th><th>Do this</th></tr>
+    <tr><td>Hide a style from buyers</td><td>Tick it and choose <b>Hide</b>. It stays in the panel and in history; it just isn't listed. Untick to show it again.</td></tr>
+    <tr><td>Add or replace photos</td><td>Open the product and upload images. They are resized and optimised automatically. The first image is the one on the catalogue card.</td></tr>
+    <tr><td>Correct a name, colour or category</td><td>Open the product and edit the fields. The article number itself never changes — it is the link to the adidas files.</td></tr>
+    <tr><td>Deal with "needs review"</td><td>A new import the site couldn't categorise is held back from the public catalogue until you set its category.</td></tr>
+    <tr><td>Show pre-owned or ex-display stock</td><td>Off by default. Turn it on under Settings; anything not new is clearly labelled wherever it appears.</td></tr>
+  </table>
+  <div class="note important"><div class="t">Important</div><p>Buyers never see wholesale or cost prices anywhere — not on the site, not in the emails, not in the Excel download. Retail RRP is shown, labelled as retail, so a buyer can see the product's normal shelf price without mistaking it for your quote.</p></div>
+</section>
+
+<!-- ============================ 8 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">8</span><h1>Email: sending, and who gets notified</h1></div>
+  <p class="lede">Email is how requests reach you. Two separate settings: the account the site sends <i>from</i>, and the people who <i>receive</i>.</p>
+
+  <h2>A. The account the site sends from</h2>
+  <p>The site sends through a Gmail account you own, using a special 16-character <b>app password</b> that Google creates for exactly this purpose. Your real Gmail password is never used or stored.</p>
+  <div class="two">
+    <div>
+      <ol class="steps">
+        <li><div>Use a Gmail account for the business — a dedicated one such as <span class="mono">pinhigh.quotes@gmail.com</span> is ideal.</div></li>
+        <li><div>In that Google Account: <b>Security → 2-Step Verification</b> (turn it on if it isn't) → <b>App passwords</b>. Create one, name it "Mail" or "Pin High". Google shows a 16-character code once.</div></li>
+        <li><div>In the admin panel: <b>Settings → Email sending</b>. Enter the Gmail address and paste the 16-character code. <b>Save Gmail details.</b> It is stored encrypted and never shown again.</div></li>
+        <li><div>Type your own address under <b>Send a test to</b> and press <b>Send test email</b>. If it arrives, you're done — the status card turns green.</div></li>
+      </ol>
+    </div>
+    <figure><img src="shots/settings-email.png" alt=""><figcaption><b>Settings → Email sending.</b> The status line at the top tells you which account is currently sending.</figcaption></figure>
+  </div>
+  <div class="note"><div class="t">Tip</div><p>If Google won't show "App passwords", 2-Step Verification isn't on yet for that account. Turn it on first; the option appears afterwards.</p></div>
+
+  <h2>B. Who receives quote requests</h2>
+  <figure class="crop"><div class="frame" style="height:52mm"><img src="shots/recipients.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Recipients.</b> Everyone listed and ticked is emailed the moment a request arrives. Buyers never see these addresses.</figcaption></figure>
+  <ol class="steps">
+    <li><div>Go to <b>Recipients</b>. Under <b>Add someone</b>, enter a name and email address and press <b>Add recipient</b>.</div></li>
+    <li><div>Untick someone to pause them (holiday cover), or <b>Remove</b> them.</div></li>
+    <li><div>Keep at least two active addresses so a single full inbox never loses a lead.</div></li>
+  </ol>
+  <div class="note important"><div class="t">Important</div><p>If the dashboard says a notification <b>failed</b>, the request is safe in the panel — nobody was told. Fix email sending (A above), then open the request and press <b>Resend notifications</b>.</p></div>
+</section>
+
+<!-- ============================ 9 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">9</span><h1>Editing your public website</h1></div>
+  <p class="lede">Everything a visitor reads on the home page, the contact details, and the promise you make on confirmations — all under <b>Settings</b>. Changes go live the moment you save.</p>
+
+  <div class="two">
+    <figure class="crop"><div class="frame" style="height:40mm"><img src="shots/settings-flyer.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Front flyer.</b> The small line, headline, paragraph and button on the home page. Leave a field empty to keep the default.</figcaption></figure>
+    <figure class="crop"><div class="frame" style="height:40mm"><img src="shots/settings-hero.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Hero background.</b> Up to six of your own wide photos behind the headline; with two or more you can turn on a slow slideshow.</figcaption></figure>
+  </div>
+  <div class="two">
+    <figure class="crop"><div class="frame" style="height:40mm"><img src="shots/settings-announcement.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Announcement banner.</b> A line across the top of every page — new season landing, holiday hours. Empty hides it.</figcaption></figure>
+    <figure class="crop"><div class="frame" style="height:40mm"><img src="shots/settings-contact.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Contact details.</b> Sales email, phone, and the WhatsApp number behind the "message us" button on confirmations. Empty fields simply aren't shown.</figcaption></figure>
+  </div>
+  <figure class="w45 center"><img src="shots/settings-quoting.png" alt=""><figcaption><b>Quoting.</b> The minimum units per branded design (a warning to buyers, never a block) and the <b>response time you promise</b> — shown on the confirmation page and in the buyer's email. Set it to what the team will actually keep.</figcaption></figure>
+
+  <h3>Also under Settings</h3>
+  <ul>
+    <li><b>New-product carousel</b> — a strip of chosen article numbers on the home page. Off until you turn it on.</li>
+    <li><b>Pre-owned and ex-display stock</b> — hidden from buyers by default (Chapter 7).</li>
+    <li><b>Check your work:</b> after saving, open the public site in a new tab (<b>View site</b>, top of every admin page) and read it as a visitor would.</li>
+  </ul>
+</section>
+
+<!-- ============================ 10 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">10</span><h1>When something isn't right</h1></div>
+  <p class="lede">Start with the <b>System status</b> card on the dashboard. Then find the symptom below.</p>
+
+  <h2>Who fixes what</h2>
+  <div class="cols">
+    <div class="you"><h4>In the admin panel — you</h4>
+      <ul><li>Email sending and the test email</li><li>Who receives requests</li><li>Who can sign in, roles, resets</li><li>Your password and authenticator</li><li>Stock uploads, rollbacks, adjustments</li><li>Products, photos, visibility</li><li>Home page, banner, contact details, response time</li><li>Every quote request</li></ul></div>
+    <div class="dev"><h4>In the hosting — your developer</h4>
+      <ul><li>Any status line marked "Needs your developer"</li><li>Connecting pinhighuae.com to the site</li><li>An owner locked out with no phone, no codes and no other owner</li><li>New features, new brands' file formats, how prices are shown</li></ul>
+      <p class="small" style="margin:2mm 0 0">Your site runs on Vercel; the database and files are on Supabase; the code is on GitHub. All should be registered to the business.</p></div>
+  </div>
+
+  <h2>Symptoms and fixes</h2>
+
+  <table>
+    <tr><th style="width:30%">Symptom</th><th style="width:30%">Most likely cause</th><th>What to do</th></tr>
+    <tr><td>A buyer says they sent a request but nothing arrived</td><td>Email sending is off, or nobody is on the Recipients list</td><td>Check the request exists under Quote requests (it will). Fix the red line on the status card. Open the request → Resend notifications.</td></tr>
+    <tr><td>Dashboard says a notification failed</td><td>Gmail app password wrong or revoked</td><td>Settings → Email sending → enter a new app password → Send test email. Then Resend notifications on the affected requests.</td></tr>
+    <tr><td>The buyer got no confirmation email</td><td>Same as above</td><td>Same as above. The buyer still had the reference on screen.</td></tr>
+    <tr><td>Site shows stock you don't have</td><td>A wrong upload, or a request approved twice</td><td>Stock → Uploads → roll back the upload; or Stock → History to see what changed a size, and adjust.</td></tr>
+    <tr><td>A style is missing from the public catalogue</td><td>Hidden, or "needs review", or sold out in every size</td><td>Products → find it → make it visible / set its category. Check sizes have stock.</td></tr>
+    <tr><td>The authenticator code is always rejected</td><td>Phone clock is wrong, or you're reading another site's code</td><td>Set the phone's time to automatic. Make sure the entry in the app says Pin High UAE. Or use a recovery code and re-set the authenticator.</td></tr>
+    <tr><td>"Too many attempts"</td><td>Repeated wrong sign-ins</td><td>Wait a few minutes and try again with the newest code.</td></tr>
+    <tr><td>Everyone was signed out at once</td><td>The site was updated and a hosting setting is missing</td><td>Sign in again. If it keeps happening, the status card's "Sign-in security" line will be red — that's for your developer.</td></tr>
+    <tr><td>A colleague can't accept their invitation</td><td>The link is over seven days old or was already used</td><td>Users → send a new invitation.</td></tr>
+    <tr><td>Uploaded photos disappear</td><td>File storage is not connected</td><td>Status card "Photos and artwork" — developer.</td></tr>
+  </table>
+
+</section>
+
+<!-- ============================ 11 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">11</span><h1>People and access</h1></div>
+  <p class="lede">Owners manage who can sign in under <b>Users</b>. Nobody else — no developer — needs to be involved.</p>
+
+  <table class="kv">
+    <tr><th style="width:20%">Role</th><th>Can do</th></tr>
+    <tr><td><b>Staff</b></td><td>Everything day to day: quote requests, stock, products, recipients, settings, their own security.</td></tr>
+    <tr><td><b>Owner</b></td><td>All of that, plus this page: invite and remove people, change roles, issue password resets, reset a lost authenticator.</td></tr>
+  </table>
+
+  <figure><img src="shots/users-annotated.png" alt=""><figcaption><b>Users.</b> <span class="badge">1</span> everyone with an account and their state · <span class="badge">2</span> the new person's email · <span class="badge">3</span> their role · <span class="badge">4</span> send.</figcaption></figure>
+
+  <h2>Adding someone</h2>
+  <ol class="steps">
+    <li><div>Go to <b>Users</b>. Under <b>Add someone</b>, enter their email <span class="badge">2</span> and choose Staff or Owner <span class="badge">3</span>. Press <b>Send invitation</b> <span class="badge">4</span>.</div></li>
+    <li><div>They receive an email with a link. It works once and lasts seven days. They choose a password, then set up their authenticator exactly as in Chapter 2.</div></li>
+    <li><div>Until they've done that, they show as <b>Invited — not yet set up</b> in the list <span class="badge">1</span>.</div></li>
+  </ol>
+  <figure class="w80 center"><img src="shots/users-invite-link.png" alt=""><figcaption><b>If email isn't set up yet</b>, the panel shows you the invitation link instead. Copy it and send it to them on WhatsApp — it works the same way.</figcaption></figure>
+
+  <h2>Everything else on this page</h2>
+  <table>
+    <tr><th style="width:32%">Link</th><th>What happens</th></tr>
+    <tr><td><b>Remove access</b></td><td>Their sign-in stops working immediately, even mid-session. Nothing they did is deleted. <b>Restore access</b> undoes it.</td></tr>
+    <tr><td><b>Make owner</b> / <b>Make staff</b></td><td>Changes their role. The last owner can't be demoted — make someone else an owner first.</td></tr>
+    <tr><td><b>Send password reset</b></td><td>Emails them a one-hour link (or shows it to you if email isn't set up). Their authenticator is untouched.</td></tr>
+    <tr><td><b>Reset authenticator (lost phone)</b></td><td>Removes their authenticator. Next time they sign in with their password, they set up a new one.</td></tr>
+  </table>
+  <div class="note important"><div class="t">Important — always two owners</div><p>An owner is the only person who can reset another's lost authenticator. If the only owner loses their phone and their recovery codes, the business is locked out until a developer intervenes. Make a trusted second person an owner today; the status card will remind you until you do.</p></div>
+</section>
+
+<!-- ============================ 12 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">12</span><h1>Your own security</h1></div>
+  <p class="lede">Your password and authenticator live under <b>Security</b> (or click your email in the top bar).</p>
+
+  <figure class="crop"><div class="frame" style="height:80mm"><img src="shots/security-enabled.png" alt="" style="object-fit:cover;object-position:top"></div><figcaption><b>Security.</b> Authenticator status and how many recovery codes are left; new codes; replacing the authenticator; changing your password.</figcaption></figure>
+
+  <h2>Changing your password</h2>
+  <ol class="steps">
+    <li><div>Under <b>Admin password</b>, type your current password, then the new one twice. At least 12 characters — a short phrase is easier to remember and harder to guess than a "clever" short one.</div></li>
+    <li><div><b>Change password.</b> Anyone signed in stays signed in until their 12 hours run out.</div></li>
+  </ol>
+
+  <h2>Recovery codes</h2>
+  <ul>
+    <li>The page shows how many you have left. When you're down to two, press <b>Get new recovery codes</b> — a fresh set of eight replaces the old ones (which stop working).</li>
+    <li>Treat them like keys: anyone holding a code <i>and</i> your password can sign in.</li>
+  </ul>
+
+  <h2>New phone</h2>
+  <ol class="steps">
+    <li><div><b>Before</b> you wipe the old phone, sign in on a computer and choose <b>New phone? Replace the authenticator</b>. Enter your password, scan with the new phone and confirm a code. The old phone keeps working until you do.</div></li>
+    <li><div>Old phone already gone? Sign in with a <b>recovery code</b> instead, then do the same.</div></li>
+  </ol>
+</section>
+
+<!-- ============================ 13 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">13</span><h1>Lost phone, forgotten password</h1></div>
+  <p class="lede">Every one of these has a route back in that does not involve a developer — as long as there are two owners and you kept your recovery codes.</p>
+
+  <div class="tree">
+    <div class="q">I've forgotten my password</div>
+    <div class="branches">
+      <div class="branch"><div class="ans">Email is set up on the site</div><ol><li>Sign-in page → <b>Forgotten your password?</b></li><li>Enter your email. A link arrives; it works once and lasts an hour.</li><li>Choose a new password. You'll be asked for your authenticator code as usual.</li></ol></div>
+      <div class="branch no"><div class="ans">Email isn't set up, or the link never arrives</div><ol><li>Ask another owner.</li><li>They go to <b>Users → Send password reset</b> on your account.</li><li>The panel shows them the link; they send it to you on WhatsApp.</li></ol></div>
+    </div>
+  </div>
+
+  <div class="tree">
+    <div class="q">I've lost my phone (or it was wiped)</div>
+    <div class="branches">
+      <div class="branch"><div class="ans">I have my recovery codes</div><ol><li>Sign in with your password.</li><li>At the code step, enter one recovery code.</li><li>You land on Security: choose <b>Replace the authenticator</b> and scan with the new phone.</li></ol></div>
+      <div class="branch no"><div class="ans">I don't have the codes</div><ol><li>Ask another owner.</li><li>They go to <b>Users → Reset authenticator</b> on your account.</li><li>Sign in with your password; you'll be taken straight to set up a new authenticator.</li></ol></div>
+    </div>
+  </div>
+
+  <div class="tree">
+    <div class="q">I'm the only owner, and I have neither phone nor codes</div>
+    <div class="branches">
+      <div class="branch no" style="grid-column:1/-1;padding:2mm 3mm"><div class="ans">This one needs a developer</div><p style="margin:0">The procedure is in the project's handover document (HANDOVER.md, "Break-glass procedures"). It takes a developer a few minutes. It is also exactly why the site keeps asking for a second owner.</p></div>
+    </div>
+  </div>
+
+  <figure class="w45 center"><img src="shots/forgot.png" alt=""><figcaption><b>Forgotten password.</b> When email isn't set up the page says so honestly, and points you to an owner.</figcaption></figure>
+</section>
+
+<!-- ============================ 14 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">14</span><h1>A rhythm for running the site</h1></div>
+  <p class="lede">Ten minutes a day keeps everything current. Here is a routine that covers all of it.</p>
+  <div class="timeline">
+    <div><b>Every day</b><ul><li>Open the dashboard.</li><li>Anything red? Deal with it.</li><li>Reply to requests in <b>New</b>; set their status.</li></ul></div>
+    <div><b>Every week</b><ul><li>Requests stuck in In progress or Quoted — chase or mark Lost.</li><li>Glance at "sizes down to single figures".</li></ul></div>
+    <div><b>Every delivery</b><ul><li>Upload the adidas implementation file and invoice.</li><li>Read the preview. Confirm.</li><li>Check a product page.</li></ul></div>
+    <div><b>Every quarter</b><ul><li>Users: still the right people? Two owners?</li><li>Recovery codes: enough left?</li><li>Home page copy and photos still current?</li></ul></div>
+  </div>
+
+  <h2>Handover checklist</h2>
+  <p>Tick these once and the business is self-sufficient:</p>
+  <table>
+    <tr><th style="width:6%"></th><th>Done once</th></tr>
+    <tr><td>☐</td><td>The owner has signed in, set an authenticator, and saved the recovery codes.</td></tr>
+    <tr><td>☐</td><td>The owner has changed the starting password to one only they know.</td></tr>
+    <tr><td>☐</td><td>A second trusted person has been invited as an <b>owner</b> and has finished setting up.</td></tr>
+    <tr><td>☐</td><td>Email sending is configured with the business's Gmail and the test email arrived.</td></tr>
+    <tr><td>☐</td><td>At least two addresses are on the Recipients list.</td></tr>
+    <tr><td>☐</td><td>A test request has been sent from the public site and arrived by email.</td></tr>
+    <tr><td>☐</td><td>The status card shows no red lines (amber "optional" lines are fine).</td></tr>
+    <tr><td>☐</td><td>The Vercel, Supabase, GitHub and Gmail accounts are registered to the business, and two people know where the logins are.</td></tr>
+  </table>
+</section>
+
+<!-- ============================ 15 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">15</span><h1>Quick reference</h1></div>
+  <div class="quickref">
+    <div class="card"><h4>Addresses</h4><ul><li>Public site: your domain</li><li>Admin panel: your domain <span class="mono">/admin</span></li><li>Help inside the panel: <b>Help</b> tab</li></ul></div>
+    <div class="card"><h4>Signing in</h4><ul><li>Email + password, then the six-digit code</li><li>Newest code only; each works once</li><li>Signed in for 12 hours</li><li>Recovery code goes in the code box</li></ul></div>
+    <div class="card"><h4>A request arrives</h4><ul><li>Everyone on Recipients is emailed</li><li>Open → price → reply → set status</li><li>Approved / Won take stock; Lost doesn't</li><li>Reply within the time you promised</li></ul></div>
+    <div class="card"><h4>Stock</h4><ul><li>Upload implementation file + invoice</li><li>Read the preview, then confirm</li><li>Wrong? Stock → Uploads → roll back</li></ul></div>
+    <div class="card"><h4>Email</h4><ul><li>Settings → Email sending: Gmail + app password</li><li>Send a test to yourself</li><li>Recipients: who gets requests</li></ul></div>
+    <div class="card"><h4>People</h4><ul><li>Users: invite, remove, roles, resets</li><li>Always two owners</li><li>Invite links last 7 days; reset links 1 hour</li></ul></div>
+    <div class="card"><h4>Never</h4><ul><li>Share your recovery codes or password</li><li>Confirm a stock upload without reading the preview</li><li>Tell a buyer they have "ordered" — it is a quote request</li></ul></div>
+    <div class="card"><h4>Call a developer for</h4><ul><li>Any status line marked "Needs your developer"</li><li>Connecting the domain</li><li>Only owner locked out with no phone and no codes</li></ul></div>
+  </div>
+</section>
+
+<!-- ============================ 16 ============================ -->
+<section class="chapter">
+  <div class="chapter-head"><span class="chapter-num">16</span><h1>Glossary</h1></div>
+  <table class="kv">
+    <tr><td><b>Admin panel</b></td><td>The private part of the site at <span class="mono">/admin</span> where you run things. Buyers never see it.</td></tr>
+    <tr><td><b>Authenticator app</b></td><td>A phone app (Google Authenticator, Microsoft Authenticator) that shows a six-digit code that changes every 30 seconds. The second step of signing in.</td></tr>
+    <tr><td><b>Recovery code</b></td><td>One of eight single-use codes that replace the phone code if the phone is lost.</td></tr>
+    <tr><td><b>Owner / Staff</b></td><td>The two roles. Owners can also manage people.</td></tr>
+    <tr><td><b>Quote request</b></td><td>What a buyer sends: lines, sizes, logo, details. A lead, not an order.</td></tr>
+    <tr><td><b>Reference</b></td><td>The request's number, e.g. <span class="mono">PH-Q-2026-0001</span>. On the confirmation, in every email, in the panel.</td></tr>
+    <tr><td><b>Size run</b></td><td>Quantities per size for one style and colour.</td></tr>
+    <tr><td><b>Article number</b></td><td>adidas's code for a style and colour, e.g. <span class="mono">HZ6893</span>. Never changes.</td></tr>
+    <tr><td><b>Implementation file / invoice</b></td><td>The two spreadsheets adidas sends with a delivery. The first lists articles and sizes; the second, quantities.</td></tr>
+    <tr><td><b>Retail RRP</b></td><td>adidas's recommended shelf price in AED, shown to buyers and labelled as retail. Not your quote.</td></tr>
+    <tr><td><b>Recipients</b></td><td>The email addresses that receive each new request.</td></tr>
+    <tr><td><b>App password</b></td><td>A 16-character code Google creates so an application can send from a Gmail account without knowing the real password.</td></tr>
+    <tr><td><b>System status</b></td><td>The dashboard card that reports each connection the site relies on, and who fixes it.</td></tr>
+    <tr><td><b>Vercel / Supabase / GitHub</b></td><td>Where the site runs, where its data and files live, and where its code is kept. Developer territory; owned by the business.</td></tr>
+  </table>
+  <p class="small" style="margin-top:8mm">Pin High UAE — Owner's Guide, version 1.0. Regenerate this document from <span class="mono">docs/owner-guide/</span> in the project whenever the panel changes.</p>
+</section>
+
+</div>
+</body>
+</html>

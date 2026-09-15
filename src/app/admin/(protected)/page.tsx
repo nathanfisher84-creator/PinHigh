@@ -3,6 +3,7 @@ import { getDashboardStats } from "@/lib/repo/quotes";
 import { getStockCounts } from "@/lib/repo/stock";
 import { formatDateTime, hoursSince, money, relativeTime } from "@/lib/format";
 import { QUOTE_STATUS_LABELS } from "@/lib/domain/types";
+import { SystemStatus } from "@/components/admin/SystemStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,11 @@ export default async function AdminDashboard() {
           </ul>
         </section>
       )}
+
+      {/* Is the site actually wired up? Red here is why "nothing arrived". */}
+      <div className="mt-6">
+        <SystemStatus />
+      </div>
 
       {/* Numbers */}
       <div className="mt-8 grid gap-px bg-sand sm:grid-cols-2 lg:grid-cols-4">

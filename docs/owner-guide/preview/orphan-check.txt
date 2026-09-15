@@ -1,0 +1,26 @@
+p02 words= 189 imgs=0 content-to= 67%
+p03 words= 157 imgs=2 content-to= 72%
+p04 words= 126 imgs=3 content-to= 91%
+p05 words= 157 imgs=1 content-to= 61%
+p06 words= 106 imgs=1 content-to= 74%
+p07 words=  97 imgs=1 content-to= 37%
+p08 words= 159 imgs=1 content-to= 57%
+p09 words= 110 imgs=1 content-to= 85%
+p10 words= 229 imgs=0 content-to= 69%
+p11 words= 149 imgs=2 content-to= 92%
+p12 words= 154 imgs=0 content-to= 51%
+p13 words= 243 imgs=3 content-to= 92%
+p14 words= 209 imgs=1 content-to= 87%
+p15 words= 211 imgs=1 content-to= 71%
+p16 words=  98 imgs=1 content-to= 49%
+p17 words= 220 imgs=5 content-to= 89%
+p18 words= 345 imgs=0 content-to= 93%
+p19 words=  92 imgs=0 content-to= 26%
+p20 words= 154 imgs=1 content-to= 90%
+p21 words= 173 imgs=1 content-to= 77%
+p22 words= 182 imgs=1 content-to= 85%
+p23 words= 263 imgs=1 content-to= 90%
+p24 words= 228 imgs=0 content-to= 68%
+p25 words= 180 imgs=0 content-to= 67%
+p26 words= 259 imgs=0 content-to= 83%
+ORPHANS: 0

@@ -1,7 +1,8 @@
-import { getSetting, getSettings } from "@/lib/db";
+import Link from "next/link";
+import { getSettings } from "@/lib/db";
 import { saveSettings } from "@/app/admin/actions";
 import { SubmitButton } from "@/components/admin/SubmitButton";
-import { GmailSettings, PasswordSettings } from "@/components/admin/OwnerSettings";
+import { GmailSettings } from "@/components/admin/OwnerSettings";
 import { HeroImagesCard } from "@/components/admin/HeroImagesCard";
 import { emailTransportStatus } from "@/lib/notify/email";
 import { canStoreSecrets } from "@/lib/secrets";
@@ -12,7 +13,6 @@ export const metadata = { title: "Settings" };
 export default async function AdminSettingsPage() {
   const settings = await getSettings();
   const email = await emailTransportStatus();
-  const hasOwnPassword = Boolean(await getSetting("admin_password_hash"));
   const heroImages = (() => {
     try {
       const parsed = JSON.parse(settings.hero_images || "[]");
@@ -34,7 +34,6 @@ export default async function AdminSettingsPage() {
           sender={email.sender}
           canStore={canStoreSecrets()}
         />
-        <PasswordSettings hasOwnPassword={hasOwnPassword} />
         <HeroImagesCard images={heroImages} rotate={settings.hero_rotate === "true"} />
       </div>
 
@@ -219,12 +218,15 @@ export default async function AdminSettingsPage() {
       </form>
 
       <section className="mt-12 hairline bg-paper-raised px-4 py-4">
-        <h2 className="label-caps mb-2">Set by your developer</h2>
+        <h2 className="label-caps mb-2">Elsewhere</h2>
         <p className="text-sm text-graphite-ink">
-          Currency (AED), the 5% VAT note and the price disclaimers are fixed
-          across the site so they can never disagree with each other. Email and
-          WhatsApp connection details live in the environment, not here — they are
-          credentials.
+          Your own password and authenticator app are under{" "}
+          <Link href="/admin/security" className="underline underline-offset-2 hover:text-fairway">
+            Security
+          </Link>
+          ; who can sign in is under Users. Currency (AED), the 5% VAT note and
+          the price disclaimers are fixed across the site so they can never
+          disagree with each other.
         </p>
       </section>
     </div>

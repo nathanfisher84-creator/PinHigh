@@ -5,11 +5,17 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import {
   clearSession,
-  getSession,
+  clearPendingMfa,
+  getVerifiedSession,
+  readPendingMfa,
+  sessionFor,
+  setPendingMfa,
   setSession,
-  verifyCredentials,
-  adminConfigured,
 } from "@/lib/auth";
+import * as accounts from "@/lib/admin-auth";
+import { touchLogin } from "@/lib/repo/admin-users";
+import type { AdminRole } from "@/lib/repo/admin-users";
+import { emailConfigured, sendAccountEmail } from "@/lib/notify/email";
 import { audit, run, setSetting, uid, now, getSetting } from "@/lib/db";
 import { rateLimit, clientIp } from "@/lib/ratelimit";
 import {
@@ -29,9 +35,33 @@ import type { QuoteStatus } from "@/lib/domain/types";
  * each one re-checks the signed session cookie itself. The /admin middleware
  * only guards page navigation - it never sees a direct action invocation. */
 async function requireAdmin(): Promise<string> {
-  const session = await getSession();
+  return (await requireActor()).email;
+}
+
+/** The signed-in account, verified against its row (removed access stops now). */
+async function requireActor(): Promise<accounts.Actor> {
+  const session = await getVerifiedSession();
   if (!session) throw new Error("Not signed in.");
-  return session.email;
+  return { uid: session.uid, email: session.email, role: session.role };
+}
+
+/**
+ * Where links in account emails should point. Always the deployment's own
+ * address from the environment - never the request's Host header, which a
+ * caller of the public "forgotten password" form could set to their own
+ * domain and so be handed the victim's reset token when the link is
+ * clicked. The request host is consulted only in local development, where
+ * no deployment URL exists.
+ */
+async function requestOrigin(): Promise<string> {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
+  if (process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3400";
+  return `http://${host}`;
 }
 
 
@@ -47,15 +77,15 @@ export async function login(
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/admin");
 
-  if (!adminConfigured()) {
+  if (!(await accounts.adminConfigured())) {
     return {
       error:
-        "No admin account is configured. Set ADMIN_EMAIL and ADMIN_PASSWORD in the environment, then restart.",
+        "No admin account exists yet. Set ADMIN_EMAIL and ADMIN_PASSWORD in the environment for the first sign-in.",
     };
   }
 
-  // Rate limit the login itself (§2). Brute-forcing a single shared password is
-  // the obvious attack against this seam.
+  // Rate limit the login itself (§2). Brute-forcing a password is the obvious
+  // attack against this seam.
   const headerList = await headers();
   const limit = await rateLimit(clientIp(headerList), 10, "login");
   if (!limit.allowed) {
@@ -64,22 +94,153 @@ export async function login(
     };
   }
 
-  const session = await verifyCredentials(email, password);
-  if (!session) {
+  const user = await accounts.verifyCredentials(email, password);
+  if (!user) {
     await audit("admin.login.failed", email);
     // One message for both cases — telling an attacker which half was wrong is
     // free information.
     return { error: "That email and password don't match." };
   }
 
-  await setSession(session);
-  await audit("admin.login", session.email);
-  redirect(next.startsWith("/admin") ? next : "/admin");
+  const safeNext = next.startsWith("/admin") ? next : "/admin";
+
+  if (user.mfa_enabled) {
+    // Password accepted; the session is not issued until the code lands.
+    await setPendingMfa(user);
+    redirect(`/admin/login/mfa?next=${encodeURIComponent(safeNext)}`);
+  }
+
+  await setSession(sessionFor(user));
+  await touchLogin(user.id);
+  await audit("admin.login", user.email, undefined, user.email);
+  redirect(safeNext);
+}
+
+/** Second step of sign-in: a code from the authenticator app, or a recovery code. */
+export async function verifyMfa(
+  _prev: { error?: string } | null,
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const code = String(formData.get("code") ?? "");
+  const next = String(formData.get("next") ?? "/admin");
+
+  const pending = await readPendingMfa();
+  if (!pending) redirect("/admin/login");
+
+  const limit = await rateLimit(pending.uid, 8, "mfa");
+  if (!limit.allowed) {
+    return {
+      error: `Too many attempts. Try again in ${Math.ceil(limit.resetSeconds / 60)} minutes.`,
+    };
+  }
+
+  const result = await accounts.verifySecondFactor(pending.uid, code);
+  if (!result.ok) {
+    await audit("admin.mfa.failed", pending.email);
+    return { error: result.message };
+  }
+
+  const { getAdminUserById } = await import("@/lib/repo/admin-users");
+  const user = await getAdminUserById(pending.uid);
+  if (!user || !user.is_active) redirect("/admin/login");
+
+  await clearPendingMfa();
+  await setSession(sessionFor(user));
+  await touchLogin(user.id);
+  await audit("admin.login", user.email, { via: result.via }, user.email);
+
+  const safeNext = next.startsWith("/admin") ? next : "/admin";
+  if (result.via === "recovery") {
+    // Land on the Security page so what just happened is visible.
+    redirect(`/admin/security?recovery=${result.remaining}`);
+  }
+  redirect(safeNext);
 }
 
 export async function logout() {
   await clearSession();
+  await clearPendingMfa();
   redirect("/admin/login");
+}
+
+/* -------------------------------------------------------------------------
+   Forgotten password, invitations (public — no session)
+   ---------------------------------------------------------------------- */
+
+function accountEmailHtml(heading: string, body: string, link: string, action: string): string {
+  return `<div style="font-family:system-ui,sans-serif;max-width:32rem">
+    <h1 style="font-size:20px">${heading}</h1>
+    <p>${body}</p>
+    <p><a href="${link}" style="display:inline-block;background:#1B2A47;color:#fff;padding:10px 18px;text-decoration:none">${action}</a></p>
+    <p style="font-size:12px;color:#555">If the button doesn't work, copy this link:<br>${link}</p>
+  </div>`;
+}
+
+export async function requestPasswordReset(
+  _prev: { message?: string; error?: string } | null,
+  formData: FormData,
+): Promise<{ message?: string; error?: string }> {
+  const email = String(formData.get("email") ?? "");
+  const headerList = await headers();
+  const limit = await rateLimit(clientIp(headerList), 5, "reset");
+  if (!limit.allowed) {
+    return { error: `Too many attempts. Try again in ${Math.ceil(limit.resetSeconds / 60)} minutes.` };
+  }
+
+  if (!(await emailConfigured())) {
+    return {
+      error:
+        "This site can't send email yet, so a reset link can't be emailed. Ask an owner — they can issue one from Users in the admin panel.",
+    };
+  }
+
+  const reset = await accounts.createPasswordReset(email);
+  if (reset) {
+    const link = `${await requestOrigin()}/admin/reset/${reset.token}`;
+    try {
+      await sendAccountEmail(
+        reset.user.email,
+        "Reset your Pin High admin password",
+        accountEmailHtml(
+          "Reset your password",
+          "Someone asked to reset the password for this Pin High admin account. The link works once and expires in an hour. If that wasn't you, ignore this email.",
+          link,
+          "Choose a new password",
+        ),
+      );
+    } catch (err) {
+      console.error("[pinhigh] reset email failed:", err);
+      return { error: "The email couldn't be sent. Try again, or ask an owner to issue a reset link." };
+    }
+  }
+  // Same message whether or not the address exists.
+  return { message: "If that address has an account, a reset link is on its way. It expires in an hour." };
+}
+
+/** Finish an invite or a reset: choose a password, then sign in. */
+export async function redeemAccountToken(
+  _prev: { error?: string } | null,
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const token = String(formData.get("token") ?? "");
+  const purpose = String(formData.get("purpose") ?? "");
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (purpose !== "invite" && purpose !== "reset") return { error: "Bad link." };
+  if (password !== confirm) return { error: "The two copies of the password don't match." };
+
+  const result = await accounts.redeemToken(token, purpose, password);
+  if (!result.ok) return { error: result.message };
+
+  // A reset link proves the inbox, not the phone: the second factor still applies.
+  if (result.user.mfa_enabled) {
+    await setPendingMfa(result.user);
+    redirect("/admin/login/mfa?next=%2Fadmin");
+  }
+  await setSession(sessionFor(result.user));
+  await touchLogin(result.user.id);
+  await audit("admin.login", result.user.email, { via: purpose }, result.user.email);
+  redirect("/admin/security");
 }
 
 /* -------------------------------------------------------------------------
@@ -422,7 +583,7 @@ export async function saveStockAdjustment(
   reason: string,
   note: string,
 ): Promise<{ ok: boolean; message: string }> {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) return { ok: false, message: "Not signed in." };
 
   if (changes.length === 0) {
@@ -454,7 +615,7 @@ export async function setCorporatePrices(
   ids: string[],
   price: number | null,
 ): Promise<{ ok: boolean; message: string }> {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) return { ok: false, message: "Not signed in." };
   if (ids.length === 0) return { ok: false, message: "Nothing selected." };
 
@@ -495,7 +656,7 @@ export async function setCorporatePrices(
 export async function saveGmailSettings(
   formData: FormData,
 ): Promise<{ ok: boolean; message: string }> {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) return { ok: false, message: "Not signed in." };
 
   const { canStoreSecrets, sealSecret } = await import("@/lib/secrets");
@@ -532,7 +693,7 @@ export async function saveGmailSettings(
 }
 
 export async function clearGmailSettings(): Promise<{ ok: boolean; message: string }> {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) return { ok: false, message: "Not signed in." };
 
   await setSetting("gmail_user", "");
@@ -546,7 +707,7 @@ export async function clearGmailSettings(): Promise<{ ok: boolean; message: stri
 export async function sendTestEmailAction(
   formData: FormData,
 ): Promise<{ ok: boolean; message: string }> {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) return { ok: false, message: "Not signed in." };
 
   const to = String(formData.get("to") ?? "").trim();
@@ -576,31 +737,151 @@ export async function sendTestEmailAction(
 export async function changeAdminPassword(
   formData: FormData,
 ): Promise<{ ok: boolean; message: string }> {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) return { ok: false, message: "Not signed in." };
 
   const current = String(formData.get("current") ?? "");
   const next = String(formData.get("next") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
 
-  const { verifyPassword, setAdminPassword } = await import("@/lib/auth");
-  if (!(await verifyPassword(current))) {
-    return { ok: false, message: "The current password isn't right." };
-  }
-  if (next.length < 12) {
-    return { ok: false, message: "Use at least 12 characters." };
-  }
   if (next !== confirm) {
     return { ok: false, message: "The two copies of the new password don't match." };
   }
+  return accounts.changePassword(session.uid, current, next);
+}
 
-  await setAdminPassword(next);
-  await audit("settings.password", undefined, undefined, session.email);
+/* -------------------------------------------------------------------------
+   Security page: the signed-in person's own second factor
+   ---------------------------------------------------------------------- */
 
+export async function startMfaSetup(formData?: FormData): Promise<{ ok: boolean; message?: string }> {
+  const actor = await requireActor();
+  const password = formData ? String(formData.get("password") ?? "") : "";
+  const result = await accounts.beginMfaEnrolment(actor.uid, { password });
+  if ("error" in result) return { ok: false, message: result.error };
+  revalidatePath("/admin/security");
+  return { ok: true };
+}
+
+export async function cancelMfaSetup(): Promise<{ ok: boolean }> {
+  const actor = await requireActor();
+  await accounts.cancelMfaEnrolment(actor.uid);
+  revalidatePath("/admin/security");
+  return { ok: true };
+}
+
+export async function confirmMfaSetup(
+  formData: FormData,
+): Promise<{ ok: true; recoveryCodes: string[] } | { ok: false; message: string }> {
+  const actor = await requireActor();
+  const result = await accounts.confirmMfaEnrolment(actor.uid, String(formData.get("code") ?? ""));
+  if (result.ok) revalidatePath("/admin/security");
+  return result;
+}
+
+export async function newRecoveryCodes(): Promise<
+  { ok: true; recoveryCodes: string[] } | { ok: false; message: string }
+> {
+  const actor = await requireActor();
+  const codes = await accounts.regenerateRecoveryCodes(actor.uid);
+  if (!codes) return { ok: false, message: "Set up the authenticator first." };
+  return { ok: true, recoveryCodes: codes };
+}
+
+/* -------------------------------------------------------------------------
+   Users page (owner only)
+   ---------------------------------------------------------------------- */
+
+export interface LinkResult {
+  ok: boolean;
+  message: string;
+  /** Present when email is not set up (or failed): the owner passes it on themselves. */
+  link?: string;
+}
+
+async function deliverAccountLink(
+  to: string,
+  link: string,
+  subject: string,
+  heading: string,
+  body: string,
+  action: string,
+  successMessage: string,
+): Promise<LinkResult> {
+  if (await emailConfigured()) {
+    try {
+      await sendAccountEmail(to, subject, accountEmailHtml(heading, body, link, action));
+      return { ok: true, message: successMessage };
+    } catch (err) {
+      console.error("[pinhigh] account email failed:", err);
+      return {
+        ok: true,
+        message: `The email to ${to} failed to send. Give them this link instead:`,
+        link,
+      };
+    }
+  }
   return {
     ok: true,
-    message: "Password changed. Existing sign-ins stay valid until they expire.",
+    message: `Email isn't set up on this site, so send ${to} this link yourself:`,
+    link,
   };
+}
+
+export async function inviteUser(formData: FormData): Promise<LinkResult> {
+  const actor = await requireActor();
+  const email = String(formData.get("email") ?? "");
+  const role = (String(formData.get("role") ?? "staff") === "owner" ? "owner" : "staff") as AdminRole;
+  const result = await accounts.createInvite(actor, email, role);
+  if (!result.ok) return { ok: false, message: result.message };
+  revalidatePath("/admin/users");
+  const link = `${await requestOrigin()}/admin/invite/${result.token}`;
+  return deliverAccountLink(
+    result.user.email,
+    link,
+    "You've been given access to Pin High admin",
+    "You've been invited",
+    `${actor.email} has given you access to the Pin High admin panel. Choose a password to get started — the link works once and expires in seven days.`,
+    "Set up my access",
+    `Invitation emailed to ${result.user.email}. It expires in seven days.`,
+  );
+}
+
+export async function issueResetLink(userId: string): Promise<LinkResult> {
+  const actor = await requireActor();
+  const result = await accounts.createPasswordResetFor(actor, userId);
+  if (!result.ok) return { ok: false, message: result.message };
+  const link = `${await requestOrigin()}/admin/reset/${result.token}`;
+  return deliverAccountLink(
+    result.user.email,
+    link,
+    "Reset your Pin High admin password",
+    "Reset your password",
+    `${actor.email} issued a password reset for your Pin High admin account. The link works once and expires in an hour.`,
+    "Choose a new password",
+    `Reset link emailed to ${result.user.email}. It expires in an hour.`,
+  );
+}
+
+export async function setUserActiveAction(userId: string, active: boolean) {
+  const actor = await requireActor();
+  const result = await accounts.setUserActive(actor, userId, active);
+  revalidatePath("/admin/users");
+  return result;
+}
+
+export async function setUserRoleAction(userId: string, role: AdminRole) {
+  const actor = await requireActor();
+  const result = await accounts.setUserRole(actor, userId, role);
+  revalidatePath("/admin/users");
+  return result;
+}
+
+export async function resetUserMfaAction(userId: string) {
+  const actor = await requireActor();
+  const result = await accounts.resetUserMfa(actor, userId);
+  revalidatePath("/admin/users");
+  return result;
 }
 
 /* -------------------------------------------------------------------------
@@ -628,7 +909,7 @@ async function readHeroImages(): Promise<string[]> {
 export async function uploadHeroImages(
   formData: FormData,
 ): Promise<{ ok: boolean; message: string }> {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) return { ok: false, message: "Not signed in." };
 
   const files = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
@@ -675,7 +956,7 @@ export async function uploadHeroImages(
 }
 
 export async function removeHeroImage(url: string): Promise<{ ok: boolean; message: string }> {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) return { ok: false, message: "Not signed in." };
 
   const existing = await readHeroImages();
@@ -693,7 +974,7 @@ export async function removeHeroImage(url: string): Promise<{ ok: boolean; messa
 }
 
 export async function setHeroRotation(on: boolean): Promise<{ ok: boolean; message: string }> {
-  const session = await getSession();
+  const session = await getVerifiedSession();
   if (!session) return { ok: false, message: "Not signed in." };
 
   await setSetting("hero_rotate", on ? "true" : "false");

@@ -133,6 +133,15 @@ async function deliver(msg: OutboundEmail): Promise<void> {
   throw new Error("Email is not configured.");
 }
 
+/**
+ * Account emails: invitations and password-reset links. Plain, short, and
+ * sent through whichever transport quotes use. If none is configured the
+ * caller shows the link on screen instead, so an owner is never stuck.
+ */
+export async function sendAccountEmail(to: string, subject: string, html: string): Promise<void> {
+  await deliver({ to, subject, html });
+}
+
 /** A minimal proof-of-life email, for the settings page's test button. */
 export async function sendTestEmail(to: string): Promise<void> {
   await deliver({
@@ -144,18 +153,26 @@ export async function sendTestEmail(to: string): Promise<void> {
   });
 }
 
+/** The turnaround the buyer's copy promises: the owner's setting, always. */
+async function promisedResponseHours(): Promise<string> {
+  const setting = (await getSetting("quote_response_hours")).trim();
+  if (setting && Number(setting) > 0) return setting;
+  return process.env.QUOTE_RESPONSE_HOURS ?? "24";
+}
+
 export async function sendQuoteEmail(
   quote: QuoteRequestWithLines,
   recipient: Recipient,
   isBuyerCopy = false,
 ): Promise<void> {
+  const responseHours = isBuyerCopy ? await promisedResponseHours() : undefined;
   await deliver({
     to: recipient.value,
     replyTo: isBuyerCopy ? undefined : quote.email,
     subject: isBuyerCopy
       ? `We have your quote request — ${quote.reference}`
       : `Quote request ${quote.reference} — ${quote.company_name} (${quote.total_units} units)`,
-    html: renderQuoteEmail(quote, isBuyerCopy),
+    html: renderQuoteEmail(quote, isBuyerCopy, responseHours),
     // The CSV carries indicative unit prices for the sales team. The buyer
     // copy gets no attachment at all: the public site shows no prices, and
     // a figure arriving as an attachment would undo that as surely as one
@@ -183,9 +200,14 @@ function esc(s: string | null | undefined): string {
     .replace(/"/g, "&quot;");
 }
 
-export function renderQuoteEmail(quote: QuoteRequestWithLines, isBuyerCopy: boolean): string {
+export function renderQuoteEmail(
+  quote: QuoteRequestWithLines,
+  isBuyerCopy: boolean,
+  // The owner sets this under Settings → Quoting; the same figure the
+  // confirmation screen shows. sendQuoteEmail supplies it.
+  responseHours = "24",
+): string {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://pinhighuae.com";
-  const responseHours = process.env.QUOTE_RESPONSE_HOURS ?? "24";
 
   /*
    * The sales team's copy carries retail RRP in AED, labelled as retail —
