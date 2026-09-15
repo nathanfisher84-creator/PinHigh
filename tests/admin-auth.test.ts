@@ -106,6 +106,46 @@ describe("second factor", () => {
     assert.equal(garbage.ok, false);
   });
 
+  test("replacing the authenticator needs the password, and the old one stays live until confirmed", async () => {
+    const owner = (await users.getAdminUserByEmail(OWNER))!;
+    const { openSecret } = await import("@/lib/secrets");
+    const before = (await users.getAdminUserById(owner.id))!;
+    const liveSecret = openSecret(before.totp_secret!)!;
+
+    const noPw = await auth.beginMfaEnrolment(owner.id);
+    assert.ok("error" in noPw, "a live authenticator is not replaced without the password");
+    const wrongPw = await auth.beginMfaEnrolment(owner.id, { password: "not-the-password" });
+    assert.ok("error" in wrongPw);
+
+    const begun = await auth.beginMfaEnrolment(owner.id, { password: OWN_PASSWORD });
+    assert.ok("secret" in begun);
+    const during = (await users.getAdminUserById(owner.id))!;
+    assert.equal(during.mfa_enabled, 1, "still enabled while the replacement is pending");
+    assert.equal(openSecret(during.totp_secret!), liveSecret, "the live secret is untouched");
+    assert.ok(during.recovery_codes, "recovery codes survive");
+    // The old factor still signs in during the swap (a recovery code is
+    // deterministic; an app code would depend on where the 30s step falls).
+    const stillWorks = await auth.verifySecondFactor(owner.id, recovery[2]);
+    assert.equal(stillWorks.ok, true);
+
+    // Abandoning it changes nothing.
+    await auth.cancelMfaEnrolment(owner.id);
+    assert.equal((await users.getAdminUserById(owner.id))!.totp_pending_secret, null);
+    assert.equal(openSecret((await users.getAdminUserById(owner.id))!.totp_secret!), liveSecret);
+
+    // Confirming a new one promotes it and retires the old.
+    const again = await auth.beginMfaEnrolment(owner.id, { password: OWN_PASSWORD });
+    assert.ok("secret" in again);
+    const done = await auth.confirmMfaEnrolment(owner.id, totp(again.secret));
+    assert.ok(done.ok);
+    const after = (await users.getAdminUserById(owner.id))!;
+    assert.equal(openSecret(after.totp_secret!), again.secret);
+    assert.equal(after.totp_pending_secret, null);
+    const oldCode = await auth.verifySecondFactor(owner.id, recovery[3]);
+    assert.equal(oldCode.ok, false, "the old recovery codes retire with the old authenticator");
+    recovery = done.recoveryCodes;
+  });
+
   test("regenerating recovery codes invalidates the old set", async () => {
     const owner = (await users.getAdminUserByEmail(OWNER))!;
     const fresh = await auth.regenerateRecoveryCodes(owner.id);
@@ -197,6 +237,28 @@ describe("invitations, resets and the owner's controls", () => {
     const on = await auth.setUserActive(me, staff.id, true);
     assert.ok(on.ok);
     assert.ok(await auth.verifyCredentials("staff@example.com", "brand-new-password-9"));
+  });
+
+  test("removing access kills an outstanding invite; a redeemed link never reactivates", async () => {
+    const me = await actor();
+    const inv = await auth.createInvite(me, "leaver@example.com", "staff");
+    assert.ok(inv.ok);
+    assert.ok((await auth.setUserActive(me, inv.user.id, false)).ok);
+    assert.equal(await auth.peekToken(inv.token, "invite"), null, "the link died with the access");
+    const redeemed = await auth.redeemToken(inv.token, "invite", "leaver-password-123");
+    assert.equal(redeemed.ok, false);
+    assert.equal((await users.getAdminUserById(inv.user.id))!.is_active, 0);
+
+    // Even a token issued directly on an inactive row is refused.
+    const raw = await users.issueToken(inv.user.id, "reset", 60_000);
+    assert.equal(await auth.peekToken(raw, "reset"), null);
+    assert.equal((await auth.redeemToken(raw, "reset", "leaver-password-123")).ok, false);
+
+    // Re-inviting is the owner's explicit act, and that does restore access.
+    const again = await auth.createInvite(me, "leaver@example.com", "staff");
+    assert.ok(again.ok);
+    assert.ok((await auth.redeemToken(again.token, "invite", "leaver-password-123")).ok);
+    assert.ok(await auth.verifyCredentials("leaver@example.com", "leaver-password-123"));
   });
 
   test("an owner can reset a colleague's second factor", async () => {

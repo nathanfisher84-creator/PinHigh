@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { confirmMfaSetup, newRecoveryCodes, startMfaSetup } from "@/app/admin/actions";
+import { cancelMfaSetup, confirmMfaSetup, newRecoveryCodes, startMfaSetup } from "@/app/admin/actions";
 
 /**
  * Authenticator setup and recovery codes (spec §2).
@@ -25,6 +25,7 @@ export function MfaPanel({
   const [error, setError] = useState<string | null>(null);
   const [codes, setCodes] = useState<string[] | null>(null);
   const [saved, setSaved] = useState(false);
+  const [replacing, setReplacing] = useState(false);
 
   if (codes) {
     return (
@@ -90,7 +91,7 @@ export function MfaPanel({
     );
   }
 
-  if (enabled) {
+  if (enabled && !enrolment) {
     return (
       <section className="hairline bg-paper-raised px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -126,19 +127,47 @@ export function MfaPanel({
           <button
             type="button"
             disabled={pending}
-            onClick={() => {
-              if (confirm("Replace the authenticator? The current one stops working once the new one is confirmed.")) {
-                start(async () => {
-                  const res = await startMfaSetup();
-                  if (!res.ok) setError(res.message ?? "Couldn't start.");
-                });
-              }
-            }}
+            onClick={() => setReplacing((v) => !v)}
             className="text-xs text-graphite-ink underline underline-offset-2 hover:text-flag-ink"
           >
             New phone? Replace the authenticator
           </button>
         </div>
+        {replacing && (
+          <form
+            className="mt-4 flex flex-wrap items-end gap-3 border-t border-sand pt-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const data = new FormData(e.currentTarget);
+              start(async () => {
+                const res = await startMfaSetup(data);
+                if (!res.ok) setError(res.message ?? "Couldn't start.");
+                else setError(null);
+              });
+            }}
+          >
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium">Your password, to confirm it's you</span>
+              <input
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                className="w-64 hairline bg-paper px-3 py-2 text-sm focus:outline-none focus:border-fairway"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={pending}
+              className="bg-fairway px-4 py-2 text-sm text-paper hover:bg-ink transition-colors duration-150 disabled:opacity-50"
+            >
+              {pending ? "Starting…" : "Start replacement"}
+            </button>
+            <p className="w-full text-xs text-graphite-ink">
+              Your current authenticator and recovery codes keep working until the new one is confirmed.
+            </p>
+          </form>
+        )}
         {error && (
           <p className="mt-2 text-xs text-flag-ink" role="alert">
             {error}
@@ -164,7 +193,24 @@ export function MfaPanel({
 
   return (
     <section className="hairline bg-paper-raised px-4 py-4">
-      <h2 className="label-caps mb-1">Set up your authenticator app</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="label-caps mb-1">{enabled ? "Replace your authenticator app" : "Set up your authenticator app"}</h2>
+        {enabled && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => start(async () => { await cancelMfaSetup(); })}
+            className="text-xs text-graphite-ink underline underline-offset-2 hover:text-flag-ink"
+          >
+            Cancel — keep the current one
+          </button>
+        )}
+      </div>
+      {enabled && (
+        <p className="mb-2 text-xs text-graphite-ink">
+          Your current authenticator and recovery codes keep working until you confirm a code from the new one below.
+        </p>
+      )}
       <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm">
         <li>
           On your phone, install an authenticator app if you don’t have one:{" "}

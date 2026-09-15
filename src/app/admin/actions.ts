@@ -45,12 +45,23 @@ async function requireActor(): Promise<accounts.Actor> {
   return { uid: session.uid, email: session.email, role: session.role };
 }
 
-/** Where links in emails should point: the host the admin is actually using. */
+/**
+ * Where links in account emails should point. Always the deployment's own
+ * address from the environment - never the request's Host header, which a
+ * caller of the public "forgotten password" form could set to their own
+ * domain and so be handed the victim's reset token when the link is
+ * clicked. The request host is consulted only in local development, where
+ * no deployment URL exists.
+ */
 async function requestOrigin(): Promise<string> {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
+  if (process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3400";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
+  const host = h.get("host") ?? "localhost:3400";
+  return `http://${host}`;
 }
 
 
@@ -743,10 +754,18 @@ export async function changeAdminPassword(
    Security page: the signed-in person's own second factor
    ---------------------------------------------------------------------- */
 
-export async function startMfaSetup(): Promise<{ ok: boolean; message?: string }> {
+export async function startMfaSetup(formData?: FormData): Promise<{ ok: boolean; message?: string }> {
   const actor = await requireActor();
-  const result = await accounts.beginMfaEnrolment(actor.uid);
+  const password = formData ? String(formData.get("password") ?? "") : "";
+  const result = await accounts.beginMfaEnrolment(actor.uid, { password });
   if ("error" in result) return { ok: false, message: result.error };
+  revalidatePath("/admin/security");
+  return { ok: true };
+}
+
+export async function cancelMfaSetup(): Promise<{ ok: boolean }> {
+  const actor = await requireActor();
+  await accounts.cancelMfaEnrolment(actor.uid);
   revalidatePath("/admin/security");
   return { ok: true };
 }

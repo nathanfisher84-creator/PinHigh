@@ -60,7 +60,7 @@ export default function HelpPage() {
           <h3>Lost or replaced your phone</h3>
           <ol>
             <li>At the code step, enter one of the <strong>recovery codes</strong> you saved when you set the app up. Each works once.</li>
-            <li>You land on Security. Choose “New phone? Replace the authenticator” and scan the code with the new phone.</li>
+            <li>You land on Security. Choose “New phone? Replace the authenticator”, enter your password, and scan the code with the new phone. The old one keeps working until you confirm the new one.</li>
             <li>No recovery codes either? Ask another owner: under Users they can choose “Reset authenticator” for you, and you set it up again at your next sign-in.</li>
           </ol>
           <h3>Forgotten your password</h3>

@@ -28,6 +28,8 @@ export interface AdminUser {
   created_at: string;
   password_hash: string | null;
   totp_secret: string | null;
+  /** A replacement secret awaiting its first code; the live one stays in force. */
+  totp_pending_secret: string | null;
   totp_last_counter: string | null;
   mfa_enabled: number;
   recovery_codes: string | null;
@@ -54,7 +56,7 @@ export interface AdminUserSummary {
 }
 
 const COLS =
-  "id, email, role, created_at, password_hash, totp_secret, totp_last_counter, " +
+  "id, email, role, created_at, password_hash, totp_secret, totp_pending_secret, totp_last_counter, " +
   "mfa_enabled, recovery_codes, token_hash, token_purpose, token_expires_at, " +
   "is_active, invited_by, last_login_at";
 
@@ -138,17 +140,20 @@ export async function touchLogin(id: string): Promise<void> {
 
 /* -- Second factor ------------------------------------------------------- */
 
-/** Store a not-yet-confirmed secret. Enrolment completes in enableMfa. */
+/**
+ * Store a not-yet-confirmed secret. Nothing about the current second factor
+ * changes: an authenticator (and its recovery codes) stays in force until
+ * the replacement's first code is confirmed in enableMfa.
+ */
 export async function setPendingTotp(id: string, sealedSecret: string): Promise<void> {
-  await run(
-    `UPDATE admin_users
-        SET totp_secret = ?, mfa_enabled = 0, recovery_codes = NULL, totp_last_counter = NULL
-      WHERE id = ?`,
-    sealedSecret,
-    id,
-  );
+  await run("UPDATE admin_users SET totp_pending_secret = ? WHERE id = ?", sealedSecret, id);
 }
 
+export async function clearPendingTotp(id: string): Promise<void> {
+  await run("UPDATE admin_users SET totp_pending_secret = NULL WHERE id = ?", id);
+}
+
+/** Promote the pending secret: it becomes the live one, with a fresh set of codes. */
 export async function enableMfa(
   id: string,
   recoveryHashes: string[],
@@ -156,8 +161,12 @@ export async function enableMfa(
 ): Promise<void> {
   await run(
     `UPDATE admin_users
-        SET mfa_enabled = 1, recovery_codes = ?, totp_last_counter = ?
-      WHERE id = ?`,
+        SET mfa_enabled = 1,
+            totp_secret = totp_pending_secret,
+            totp_pending_secret = NULL,
+            recovery_codes = ?,
+            totp_last_counter = ?
+      WHERE id = ? AND totp_pending_secret IS NOT NULL`,
     JSON.stringify(recoveryHashes),
     lastCounter.toString(),
     id,
@@ -167,7 +176,8 @@ export async function enableMfa(
 export async function clearMfa(id: string): Promise<void> {
   await run(
     `UPDATE admin_users
-        SET mfa_enabled = 0, totp_secret = NULL, recovery_codes = NULL, totp_last_counter = NULL
+        SET mfa_enabled = 0, totp_secret = NULL, totp_pending_secret = NULL,
+            recovery_codes = NULL, totp_last_counter = NULL
       WHERE id = ?`,
     id,
   );
@@ -211,11 +221,15 @@ export async function issueToken(id: string, purpose: TokenPurpose, ttlMs: numbe
   return raw;
 }
 
-/** The user a live token belongs to, or undefined if unknown or expired. */
+/**
+ * The user a live token belongs to, or undefined if unknown, expired, or
+ * the account has had its access removed — a link sent before the removal
+ * must not be a way back in.
+ */
 export async function findByToken(raw: string, purpose: TokenPurpose): Promise<AdminUser | undefined> {
   if (!raw || raw.length > 200) return undefined;
   const user = await get<AdminUser>(
-    `SELECT ${COLS} FROM admin_users WHERE token_hash = ? AND token_purpose = ?`,
+    `SELECT ${COLS} FROM admin_users WHERE token_hash = ? AND token_purpose = ? AND is_active = 1`,
     hashToken(raw),
     purpose,
   );

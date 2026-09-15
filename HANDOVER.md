@@ -95,7 +95,8 @@ email address in each.
 
 ```sql
 update admin_users
-   set mfa_enabled = 0, totp_secret = null, recovery_codes = null, totp_last_counter = null
+   set mfa_enabled = 0, totp_secret = null, totp_pending_secret = null,
+       recovery_codes = null, totp_last_counter = null
  where email = 'owner@example.com';
 ```
 

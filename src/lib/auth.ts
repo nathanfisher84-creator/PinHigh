@@ -1,8 +1,8 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 import type { AdminRole, AdminUser } from "@/lib/repo/admin-users";
 import { getAdminUserById } from "@/lib/repo/admin-users";
+import { createToken, readToken } from "@/lib/session-token";
 
 /**
  * Admin sessions (spec §9, §11).
@@ -12,31 +12,17 @@ import { getAdminUserById } from "@/lib/repo/admin-users";
  * on every /admin route; each page re-verifies the signature here, because
  * the Edge runtime has neither the secret nor node:crypto.
  *
- * Two cookies:
+ * Two cookies, two token kinds (see `lib/session-token`):
  *   ph_admin      the session — issued only once both factors have passed
  *   ph_admin_mfa  a ten-minute marker between the password step and the
- *                 code step, so the code page knows who is mid-way through
+ *                 code step, so the code page knows who is mid-way through.
+ *                 It is never accepted where a session is required.
  */
 
 const COOKIE = "ph_admin";
 const MFA_COOKIE = "ph_admin_mfa";
 const SESSION_HOURS = 12;
 const MFA_MINUTES = 10;
-
-function secret(): string {
-  const value = process.env.ADMIN_SESSION_SECRET;
-  if (value && value.length >= 32) return value;
-  // A per-boot random secret means sessions do not survive a restart, which is
-  // a safe failure: the owner logs in again rather than the site shipping with
-  // a predictable signing key.
-  globalThis.__phSessionSecret ??= randomBytes(32).toString("hex");
-  return globalThis.__phSessionSecret;
-}
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __phSessionSecret: string | undefined;
-}
 
 export interface Session {
   uid: string;
@@ -51,43 +37,15 @@ export interface PendingMfa {
   exp: number;
 }
 
-function sign(payload: string): string {
-  return createHmac("sha256", secret()).update(payload).digest("base64url");
-}
-
-function createToken(data: object): string {
-  const payload = Buffer.from(JSON.stringify(data)).toString("base64url");
-  return `${payload}.${sign(payload)}`;
-}
-
-function readToken<T extends { exp: number }>(token: string | undefined): T | null {
-  if (!token) return null;
-  const [payload, signature] = token.split(".");
-  if (!payload || !signature) return null;
-
-  const expected = sign(payload);
-  // Constant-time compare — a length mismatch is checked first because
-  // timingSafeEqual throws on unequal buffers.
-  if (expected.length !== signature.length) return null;
-  if (!timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) return null;
-
-  try {
-    const data = JSON.parse(Buffer.from(payload, "base64url").toString()) as T;
-    if (!data.exp || data.exp < Date.now()) return null;
-    return data;
-  } catch {
-    return null;
-  }
-}
-
 export function createSessionToken(session: Session): string {
-  return createToken(session);
+  return createToken("session", session);
 }
 
 export function readSessionToken(token: string | undefined): Session | null {
-  const session = readToken<Session>(token);
-  // A token from before per-user accounts has no uid; treat it as signed out.
-  return session && session.uid ? session : null;
+  const session = readToken<Session>("session", token);
+  if (!session || typeof session.uid !== "string" || !session.uid) return null;
+  if (session.role !== "owner" && session.role !== "staff") return null;
+  return session;
 }
 
 export function sessionFor(user: AdminUser): Session {
@@ -144,7 +102,7 @@ export async function setPendingMfa(user: AdminUser): Promise<void> {
     email: user.email,
     exp: Date.now() + MFA_MINUTES * 60_000,
   };
-  store.set(MFA_COOKIE, createToken(pending), {
+  store.set(MFA_COOKIE, createToken("mfa", pending), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -155,7 +113,8 @@ export async function setPendingMfa(user: AdminUser): Promise<void> {
 
 export async function readPendingMfa(): Promise<PendingMfa | null> {
   const store = await cookies();
-  return readToken<PendingMfa>(store.get(MFA_COOKIE)?.value);
+  const pending = readToken<PendingMfa>("mfa", store.get(MFA_COOKIE)?.value);
+  return pending && typeof pending.uid === "string" && pending.uid ? pending : null;
 }
 
 export async function clearPendingMfa(): Promise<void> {

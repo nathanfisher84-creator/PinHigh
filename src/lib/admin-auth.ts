@@ -148,8 +148,16 @@ export interface Enrolment {
   uri: string;
 }
 
-/** Start (or restart) enrolment: a fresh secret, not yet trusted. */
-export async function beginMfaEnrolment(userId: string): Promise<Enrolment | { error: string }> {
+/**
+ * Start (or restart) enrolment: a fresh secret, not yet trusted. An
+ * authenticator already in force stays in force — and replacing it needs
+ * the account's password, so a borrowed session cannot quietly swap the
+ * second factor for one the attacker holds.
+ */
+export async function beginMfaEnrolment(
+  userId: string,
+  opts: { password?: string } = {},
+): Promise<Enrolment | { error: string }> {
   if (!canStoreSecrets()) {
     return {
       error:
@@ -157,7 +165,12 @@ export async function beginMfaEnrolment(userId: string): Promise<Enrolment | { e
     };
   }
   const user = await users.getAdminUserById(userId);
-  if (!user) return { error: "Not signed in." };
+  if (!user || !user.is_active) return { error: "Not signed in." };
+  if (user.mfa_enabled) {
+    if (!opts.password || !(await verifyCredentials(user.email, opts.password))) {
+      return { error: "Enter your password to replace the authenticator." };
+    }
+  }
   const secret = generateTotpSecret();
   await users.setPendingTotp(userId, sealSecret(secret));
   return { secret, uri: otpauthUri({ issuer: MFA_ISSUER, account: user.email, secret }) };
@@ -166,10 +179,15 @@ export async function beginMfaEnrolment(userId: string): Promise<Enrolment | { e
 /** The enrolment in progress, if the page is reloaded mid-way. */
 export async function pendingMfaEnrolment(userId: string): Promise<Enrolment | null> {
   const user = await users.getAdminUserById(userId);
-  if (!user || user.mfa_enabled || !user.totp_secret) return null;
-  const secret = openSecret(user.totp_secret);
+  if (!user || !user.totp_pending_secret) return null;
+  const secret = openSecret(user.totp_pending_secret);
   if (!secret) return null;
   return { secret, uri: otpauthUri({ issuer: MFA_ISSUER, account: user.email, secret }) };
+}
+
+/** Abandon a replacement; the current authenticator was never touched. */
+export async function cancelMfaEnrolment(userId: string): Promise<void> {
+  await users.clearPendingTotp(userId);
 }
 
 export async function confirmMfaEnrolment(
@@ -177,10 +195,10 @@ export async function confirmMfaEnrolment(
   code: string,
 ): Promise<{ ok: true; recoveryCodes: string[] } | { ok: false; message: string }> {
   const user = await users.getAdminUserById(userId);
-  if (!user || !user.totp_secret) {
+  if (!user || !user.totp_pending_secret) {
     return { ok: false, message: "Start by scanning the code with your authenticator app." };
   }
-  const secret = openSecret(user.totp_secret);
+  const secret = openSecret(user.totp_pending_secret);
   if (!secret) {
     return { ok: false, message: "The setup expired — start again." };
   }
@@ -190,7 +208,7 @@ export async function confirmMfaEnrolment(
   }
   const codes = generateRecoveryCodes();
   await users.enableMfa(userId, codes.map(hashRecoveryCode), counter);
-  await audit("admin.mfa.enabled", user.email, undefined, user.email);
+  await audit(user.mfa_enabled ? "admin.mfa.replaced" : "admin.mfa.enabled", user.email, undefined, user.email);
   return { ok: true, recoveryCodes: codes };
 }
 
@@ -337,7 +355,6 @@ export async function redeemToken(
   if (problem) return { ok: false, message: problem };
   await users.setPasswordHash(user.id, hashPassword(password));
   await users.clearToken(user.id);
-  await users.setActive(user.id, true);
   await audit(purpose === "invite" ? "admin.user.joined" : "admin.password.reset", user.email);
   return { ok: true, user: (await users.getAdminUserById(user.id))! };
 }
@@ -358,6 +375,8 @@ export async function setUserActive(
     return { ok: false, message: "That is the only owner. Make someone else an owner first." };
   }
   await users.setActive(userId, active);
+  // A pending invite or reset link must not outlive the access it would grant.
+  if (!active) await users.clearToken(userId);
   await audit(active ? "admin.user.reactivated" : "admin.user.deactivated", user.email, undefined, actor.email);
   return { ok: true, message: active ? "Access restored." : "Access removed. Their sign-in stops working now." };
 }

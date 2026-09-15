@@ -13,7 +13,8 @@ type SearchParams = Promise<{ next?: string }>;
 
 export default async function MfaPage({ searchParams }: { searchParams: SearchParams }) {
   const { next } = await searchParams;
-  if (await getSession()) redirect(next ?? "/admin");
+  const safeNext = next && next.startsWith("/admin") ? next : "/admin";
+  if (await getSession()) redirect(safeNext);
 
   const pending = await readPendingMfa();
   if (!pending) redirect("/admin/login");
@@ -28,7 +29,7 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
           authenticator app and enter the six-digit code for Pin High.
         </p>
 
-        <MfaForm next={next ?? "/admin"} />
+        <MfaForm next={safeNext} />
       </div>
     </div>
   );

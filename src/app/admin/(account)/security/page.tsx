@@ -26,7 +26,9 @@ export default async function SecurityPage({ searchParams }: { searchParams: Sea
   // Someone sent here to set up their authenticator should see the QR code
   // straight away, not a button to ask for one. Enrolment that is already in
   // progress is reused, so a reload never rotates the secret under them.
-  let enrolment = user.mfa_enabled ? null : await pendingMfaEnrolment(user.id);
+  // A replacement in progress (started with the password) shows too, but is
+  // never begun here: the live authenticator is only ever replaced on request.
+  let enrolment = await pendingMfaEnrolment(user.id);
   if (!enrolment && !user.mfa_enabled && mfaEnrolmentAvailable()) {
     const begun = await beginMfaEnrolment(user.id);
     if ("secret" in begun) enrolment = begun;

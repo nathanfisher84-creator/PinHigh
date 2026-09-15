@@ -212,6 +212,7 @@ async function migrate(driver: Driver): Promise<void> {
     await driver.exec(`
       ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS password_hash TEXT;
       ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
+      ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_pending_secret TEXT;
       ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_last_counter TEXT;
       ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS mfa_enabled INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS recovery_codes TEXT;
