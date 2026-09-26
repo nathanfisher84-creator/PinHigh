@@ -1,5 +1,6 @@
 import "server-only";
-import { get } from "@/lib/db";
+import { get, getSetting } from "@/lib/db";
+import { KEEPALIVE_SETTING, keepAliveStatus } from "@/lib/keepalive";
 import { emailTransportStatus } from "@/lib/notify/email";
 import { storageBackend } from "@/lib/images/storage";
 import { canStoreSecrets } from "@/lib/secrets";
@@ -53,6 +54,12 @@ export async function systemStatus(): Promise<StatusItem[]> {
         : "Running on the embedded development database.",
       action: onVercel ? `DATABASE_URL is not set. ${DEVELOPER_NOTE}` : undefined,
     });
+  }
+
+  /* -- Keep-alive -------------------------------------------------------- */
+  // Only meaningful against the hosted database; the embedded one never pauses.
+  if (process.env.DATABASE_URL) {
+    items.push(keepAliveStatus(await getSetting(KEEPALIVE_SETTING)));
   }
 
   /* -- Email ------------------------------------------------------------- */

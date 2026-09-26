@@ -156,6 +156,7 @@ export default function HelpPage() {
           </p>
           <ul>
             <li><strong>Database</strong> — red means nothing written is being kept. Developer.</li>
+            <li><strong>Daily database check</strong> — amber for a day after a new deployment is normal. Amber for longer means the daily job that stops the free database pausing has stopped; if the site then shows errors on every product page, the database has paused. Developer.</li>
             <li><strong>Email sending</strong> — red means nobody is emailed. You fix it under Settings (see above).</li>
             <li><strong>Who gets quote requests</strong> — red means no recipients. You fix it under Recipients.</li>
             <li><strong>Photos and artwork</strong> — red means uploads vanish on restart. Developer.</li>

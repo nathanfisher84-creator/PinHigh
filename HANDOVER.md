@@ -141,8 +141,16 @@ Deployments → previous deployment → *Instant Rollback*. Details in
 
 ## 8. Data and backups
 
-- Supabase keeps daily backups on paid plans (Settings → Database → Backups).
-  Confirm the plan and retention at handover.
+- **The Supabase Free plan pauses a project after about a week with too few
+  queries**, and a paused project takes the catalogue, quotes and admin
+  sign-in down until someone clicks *Restore* in Supabase (this happened on
+  23 Sep 2026). A Vercel Cron job (`vercel.json` → `/api/keepalive`) runs a
+  few reads every day at 09:17 Dubai time to prevent it; the dashboard's
+  *Daily database check* line shows when it last ran. Only the Pro plan
+  guarantees no pausing. Supabase emails the account owner a week before it
+  pauses — make sure that inbox is read.
+- Supabase keeps daily backups on paid plans only; the Free plan has none you
+  can download. Export quote requests regularly (below) until on a paid plan.
 - Quote requests can be exported at any time: Admin → Quote requests → export
   (CSV), or per request as Excel.
 - Buyers' logo files are in the private `artwork` bucket in Supabase Storage;
@@ -162,6 +170,9 @@ Deployments → previous deployment → *Instant Rollback*. Details in
   blocks retrieval; the mapping to fill is `src/lib/domain/adidas-copy.ts`.
 - **No error-tracking service**: production errors are in Vercel's logs. The
   status card covers configuration, not runtime exceptions.
+- **Hosting plans**: Vercel's free Hobby plan is for non-commercial use under
+  Vercel's terms, and Supabase Free can pause (§8). Pro on both is the
+  supported setup for a business site.
 - The terms and privacy pages were written against UAE PDPL but are not legal
   advice; have them reviewed.
 
