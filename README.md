@@ -94,8 +94,13 @@ and that is where production runs — `DATABASE_URL` points at the project's
 transaction pooler — but the application never touches Supabase's REST/Data
 API. Every query runs server-side as the table owner, the schema is applied by
 the app at boot (`src/lib/db/schema.ts` plus the migrations in `db/core.ts`),
-and RLS is enabled with no policies so the auto-generated API is closed. With
-no `DATABASE_URL` the same SQL runs against an embedded PGlite database, which
+and RLS is enabled on every public table with a restrictive deny policy for
+the Data API roles (`anon`, `authenticated`), so the auto-generated API is
+closed. Public catalogue reads and admin writes keep working because the
+server connects as the table owner and bypasses RLS. There is no public
+SELECT policy: one would expose `products.cost_price`, the sealed Gmail
+password in `settings`, and buyer details on quotes. With no
+`DATABASE_URL` the same SQL runs against an embedded PGlite database, which
 is how the test suite and local development work with zero setup.
 `supabase/migrations/0001_init.sql` is a reference copy, not what runs.
 

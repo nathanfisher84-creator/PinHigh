@@ -6,7 +6,9 @@
 --   password_hash, totp_secret, totp_pending_secret, totp_last_counter, mfa_enabled, recovery_codes,
 --   token_hash, token_purpose, token_expires_at, is_active, invited_by,
 --   last_login_at
--- and RLS is enabled with NO policies (see supabase/rls-hardening.sql).
+-- and the Data API is closed by supabase/migrations/0002_rls_lockdown.sql
+-- (RLS on, restrictive deny for anon/authenticated). Do not apply the
+-- permissive policies later in this file — they are the original spec draft.
 
 -- Pin High UAE — Postgres schema with Row Level Security
 -- Spec §3 (data model), §11 (security).
@@ -300,7 +302,11 @@ create trigger quotes_touch before update on quote_requests
   for each row execute function touch_updated_at();
 
 -- ---------------------------------------------------------------------------
--- Row Level Security — §11: "RLS on every table"
+-- Row Level Security — historical spec draft. DO NOT APPLY.
+-- Production lockdown is supabase/migrations/0002_rls_lockdown.sql.
+-- The policies below assume Supabase Auth (`auth.uid()` / `is_admin()`),
+-- which this app does not use, and a SELECT on products cannot hide
+-- cost_price. Applying them re-opens the Data API.
 -- ---------------------------------------------------------------------------
 
 alter table products                enable row level security;

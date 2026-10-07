@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     // Includes seed/images, which is how a fresh instance comes up with
     // photography rather than placeholders.
-    "/**": ["./seed/**"],
+    "/**": ["./seed/**", "./supabase/migrations/0002_rls_lockdown.sql"],
   },
   experimental: {
     /*
