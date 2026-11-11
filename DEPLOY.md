@@ -50,5 +50,8 @@ morning, UAE time. The old Shopify redirect map is in `src/lib/redirects.ts`.
 - Request bodies are capped at 4.5 MB by Vercel. Bulk image packs go in
   batches, or straight to Supabase Storage.
 - The database schema is applied by the application at boot, inside a
-  transaction under an advisory lock, so a redeploy is a migration.
+  transaction under an advisory lock, so a redeploy is a migration. That
+  includes `supabase/migrations/0002_rls_lockdown.sql` (RLS on every public
+  table, Data API denied). To apply it before the next deploy, paste that
+  file into the Supabase SQL editor.
 - `.env.example` lists every variable with what each one costs you if missing.

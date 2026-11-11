@@ -1,5 +1,6 @@
 import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { SCHEMA_SQL } from "./schema";
 
@@ -234,36 +235,18 @@ async function migrate(driver: Driver): Promise<void> {
 
   // Lock the schema against Supabase's auto-generated Data API. This app
   // never uses PostgREST: every query runs server-side through this driver
-  // as the table owner, and owners bypass row-level security - so enabling
-  // RLS with no policies plus revoking the API roles' grants closes the
-  // "anyone with the project URL can read the tables" hole (Security
-  // Advisor: rls_disabled_in_public) without changing app behaviour. The
-  // loop covers every table in public, present and future; the role checks
-  // keep the block a no-op on plain Postgres, where anon/authenticated
-  // don't exist.
+  // as the table owner, and owners bypass row-level security. The migration
+  // enables RLS on every public table and adds a restrictive deny policy for
+  // anon/authenticated (Security Advisor: rls_disabled_in_public) without
+  // changing app behaviour. Same file a person can paste into the SQL editor.
+  // On plain Postgres the role checks make the policy section a no-op.
   const hardenRls = () =>
-    driver.exec(`
-      DO $rls$
-      DECLARE t record;
-      BEGIN
-        FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
-          EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.tablename);
-          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-            EXECUTE format('REVOKE ALL ON TABLE public.%I FROM anon', t.tablename);
-          END IF;
-          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-            EXECUTE format('REVOKE ALL ON TABLE public.%I FROM authenticated', t.tablename);
-          END IF;
-        END LOOP;
-        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-          EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon';
-        END IF;
-        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-          EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM authenticated';
-        END IF;
-      END
-      $rls$;
-    `);
+    driver.exec(
+      readFileSync(
+        path.join(process.cwd(), "supabase/migrations/0002_rls_lockdown.sql"),
+        "utf8",
+      ),
+    );
 
   if (process.env.DATABASE_URL) {
     // Several processes can boot at once (next build prerenders in parallel
